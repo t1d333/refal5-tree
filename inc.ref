@@ -1,0 +1,16 @@
+*$FROM LibraryEx
+$EXTERN LoadFile, Inc, Map, MapAccum;
+
+
+*$FROM R5FW-Parser-Defs
+$EXTERN Builtins, TokName;
+
+
+/**
+  <Scan e.SourceFile> == t.Token*
+  t.Pos ::= (s.Line s.Col e.FileName)
+*/
+$ENTRY Scan {
+  e.FileName =
+    <DoScan (1 1 e.FileName) <SkipBOM <LoadFile e.FileName>>>;
+}
