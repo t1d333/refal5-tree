@@ -29,7 +29,6 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 		sources = append(sources, code)
 
 		for _, source := range sources {
-			fmt.Println(c.parser)
 			c.parser.Parse(source)
 		}
 	}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -15,10 +14,7 @@ func main() {
 		Name:  "refal5-tree",
 		Usage: "Refal5 compiler with tree strings representation",
 		Action: func(ctx *cli.Context) error {
-			fmt.Println(ctx.NArg())
-			fmt.Println(ctx.Args())
 			files := ctx.Args()
-			fmt.Println(files.Get(0))
 			for i := 0; i < files.Len(); i++ {
 				refalCompiler.Compile([]string{files.Get(i)}, compiler.CompilerOptions{})
 			}

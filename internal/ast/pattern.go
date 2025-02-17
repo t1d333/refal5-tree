@@ -3,43 +3,71 @@ package ast
 type PatternType int
 
 const (
-	SymbolPatternType = iota
+	CharactersPatternType PatternType = iota
 	VarPatternType
 	WordPatternType
 	GroupedPatternType
 	NumberPatternType
+	StringPatternType
+)
+
+type VaribaleType int
+
+const (
+	SymbolVarType VaribaleType = iota
+	TermVarType
+	ExprVarType
 )
 
 type PatternNode interface {
 	GetPatternType() PatternType
 }
 
-type SymbolPattern struct{}
-
-func (*SymbolPattern) GetPatternType() PatternType {
-	return SymbolPatternType
+type CharactersPattern struct {
+	Value []byte
 }
 
-type WordPattern struct{}
+func (*CharactersPattern) GetPatternType() PatternType {
+	return CharactersPatternType
+}
+
+type WordPattern struct {
+	Value string
+}
 
 func (*WordPattern) GetPatternType() PatternType {
-	return SymbolPatternType
+	return WordPatternType
 }
 
-type NumberPattern struct{}
+type NumberPattern struct {
+	Value uint
+}
 
 func (*NumberPattern) GetPatternType() PatternType {
-	return SymbolPatternType
+	return NumberPatternType
 }
 
-type VarPattern struct{}
+type StringPattern struct {
+	Value string
+}
+
+func (*StringPattern) GetPatternType() PatternType {
+	return StringPatternType
+}
+
+type VarPattern struct {
+	Type VaribaleType
+	Name string
+}
 
 func (*VarPattern) GetPatternType() PatternType {
-	return SymbolPatternType
+	return VarPatternType
 }
 
-type GroupedPattern struct{}
+type GroupedPattern struct {
+	Patterns []PatternNode
+}
 
 func (*GroupedPattern) GetPatternType() PatternType {
-	return SymbolPatternType
+	return GroupedPatternType
 }
