@@ -8,24 +8,29 @@ const (
 )
 
 type SentenceNode struct {
-	Lhs []*PatternNode
+	Lhs []PatternNode
 	// NOTE: need conditions?
 	Condtitions []*ConditionNode
-	Rhs         *SentenceRhsNode
+	Rhs         SentenceRhsNode
 }
 
 type SentenceRhsNode interface {
 	GetSentenceRhsType() SentenceRhsType
 }
 
-type SentenceRhsResultNode struct{}
+type SentenceRhsResultNode struct {
+	Result []ResultNode
+}
 
-func (*SentenceRhsResultNode) GetRhsType() SentenceRhsType {
+func (*SentenceRhsResultNode) GetSentenceRhsType() SentenceRhsType {
 	return SentenceRhsResultType
 }
 
-type SentenceRhsBlockNode struct{}
+type SentenceRhsBlockNode struct {
+	Result []ResultNode
+	Body   []*SentenceNode
+}
 
-func (*SentenceRhsBlockNode) GetRhsType() SentenceRhsType {
+func (*SentenceRhsBlockNode) GetSentenceRhsType() SentenceRhsType {
 	return SentenceRhsBlockType
 }

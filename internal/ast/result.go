@@ -3,8 +3,9 @@ package ast
 type ResultType int
 
 const (
-	SymbolResultType = iota
+	CharactersResultType = iota
 	WordResultType
+	StringResultType
 	FunctionCallResultType
 	NumberResultType
 	VarResultType
@@ -15,37 +16,59 @@ type ResultNode interface {
 	GetResultType() ResultType
 }
 
-type SymbolResultNode struct{}
-
-func (*SymbolResultNode) GetResultType() ResultType {
-	return SymbolResultType
+type CharactersResultNode struct {
+	Value []byte
 }
 
-type WordResultNode struct{}
+func (*CharactersResultNode) GetResultType() ResultType {
+	return CharactersResultType
+}
+
+type WordResultNode struct {
+	Value string
+}
 
 func (*WordResultNode) GetResultType() ResultType {
 	return WordResultType
 }
 
-type FunctionCallResultNode struct{}
+type FunctionCallResultNode struct {
+	Ident string
+	Args  []ResultNode
+}
 
 func (*FunctionCallResultNode) GetResultType() ResultType {
 	return FunctionCallResultType
 }
 
-type NumberResultNode struct{}
+type NumberResultNode struct {
+	Value uint
+}
 
 func (*NumberResultNode) GetResultType() ResultType {
 	return FunctionCallResultType
 }
 
-type VarResultNode struct{}
+type VarResultNode struct {
+	Type VaribaleType
+	Name string
+}
+
+type StringResultNode struct {
+	Value string
+}
+
+func (*StringResultNode) GetResultType() ResultType {
+	return StringResultType
+}
 
 func (*VarResultNode) GetResultType() ResultType {
 	return VarResultType
 }
 
-type GroupedResultNode struct{}
+type GroupedResultNode struct {
+	Results []ResultNode
+}
 
 func (*GroupedResultNode) GetResultType() ResultType {
 	return GroupedResultType

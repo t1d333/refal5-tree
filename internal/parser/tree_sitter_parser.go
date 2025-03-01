@@ -30,14 +30,15 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 	var cursor *sitter.QueryCursor
 	tree, err := p.parser.ParseCtx(context.Background(), nil, source)
 	if err != nil {
-		return result, fmt.Errorf("failed to parse source code: %v", err)
+		return nil, fmt.Errorf("failed to parse source code: %v", err)
 	}
 
 	root := tree.RootNode()
 
-	// TODO: build AST and symbol table
-	// TODO: walk functions
-
+	result = &ast.AST{
+		Functions:            []*ast.FunctionNode{},
+		ExternalDeclarations: []string{},
+	}
 	cursor = sitter.NewQueryCursor()
 	query, _ := sitter.NewQuery([]byte(`
 	(function_definition
@@ -56,28 +57,24 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 
 		funcNameNode := match.Captures[0].Node
 		funcBodyNode := match.Captures[1].Node
+		funcEntryNode := funcNameNode.Parent().ChildByFieldName("entry")
+
+		if funcEntryNode != nil {
+			funcAstNode.Entry = true
+		}
 
 		funcAstNode.Name = funcNameNode.Content(source)
-		fmt.Println("Found function", funcAstNode.Name)
 		sentences, err := p.walkFunctionBody(funcBodyNode, source)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build ast: %v", err)
 		}
 
 		funcAstNode.Body = sentences
-
+		result.Functions = append(result.Functions, funcAstNode)
 	}
 
-	// TODO: walk external declarations
-	// cursor = sitter.NewQueryCursor()
-	// query, _ = sitter.NewQuery([]byte(`
-	// (external_declaration
-	// 	(
-	// 		function_name_list
-	// 		(ident) @external_function_name
-	// 	)
-	// )`), tree_sitter_refal5.GetLanguage())
-	// cursor.Exec(query, root)
+	declarations, _ := p.walkExternalDeclarations(root, source)
+	fmt.Println(declarations)
 
 	return result, nil
 }
@@ -89,6 +86,8 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 	if node == nil {
 	}
 
+	sentencies := []*ast.SentenceNode{}
+
 	for i := 0; i < int(node.ChildCount()); i++ {
 		inner := node.Child(i)
 		if inner.ChildByFieldName("sentence_eq") == nil &&
@@ -96,9 +95,16 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			continue
 		}
 
+		astSentenceNode := &ast.SentenceNode{
+			Condtitions: []*ast.ConditionNode{},
+			Lhs:         []ast.PatternNode{},
+			Rhs:         &ast.SentenceRhsResultNode{},
+		}
 		sentenceNode := inner.ChildByFieldName("sentence_eq")
+
 		if sentenceNode == nil {
 			sentenceNode = inner.ChildByFieldName("sentence_block")
+			astSentenceNode.Rhs = &ast.SentenceRhsBlockNode{}
 		}
 
 		sentenceLhsNode := sentenceNode.ChildByFieldName("lhs")
@@ -113,26 +119,66 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			lhs = append(lhs, lhsPart)
 		}
 
+		astSentenceNode.Lhs = lhs
+
+		// walk conditions
+
 		for j := 0; j < int(sentenceNode.ChildCount()); j++ {
 			child := sentenceNode.Child(j)
 			if child == nil || child.Type() != "condition" {
 				continue
 			}
 
-			// isPatternStart := "False"
-			for k := 0; k < int(child.ChildCount()); k++ {
-				child.NamedChildCount
+			condition, err := p.walkCondition(child, source)
+			if err != nil {
+				// TODO: check err
 			}
-			
-		}
 
-		// walk conditions?
+			astSentenceNode.Condtitions = append(astSentenceNode.Condtitions, condition)
+
+		}
 
 		// walk rhs
 
+		switch astSentenceNode.Rhs.GetSentenceRhsType() {
+		case ast.SentenceRhsBlockType:
+			rhsNode := sentenceNode.ChildByFieldName("block")
+			astRhsNode := &ast.SentenceRhsBlockNode{
+				Result: []ast.ResultNode{},
+			}
+
+			for i := 0; i < int(rhsNode.ChildCount()); i++ {
+				if rhsNode.FieldNameForChild(i) != "expr" {
+					continue
+				}
+				resultNode := rhsNode.Child(i)
+				tmp, _ := p.walkResult(resultNode, source)
+				astRhsNode.Result = append(astRhsNode.Result, tmp)
+			}
+
+			bodyNode := rhsNode.ChildByFieldName("body")
+			astBody, _ := p.walkFunctionBody(bodyNode, source)
+			astRhsNode.Body = astBody
+
+			astSentenceNode.Rhs = astRhsNode
+		case ast.SentenceRhsResultType:
+			rhsNode := sentenceNode.ChildByFieldName("rhs")
+			astRhsNode := &ast.SentenceRhsResultNode{
+				Result: []ast.ResultNode{},
+			}
+			for i := 0; i < int(rhsNode.ChildCount()); i++ {
+				child := rhsNode.Child(i)
+				tmp, _ := p.walkResult(child, source)
+				astRhsNode.Result = append(astRhsNode.Result, tmp)
+			}
+			astSentenceNode.Rhs = astRhsNode
+		}
+
+		sentencies = append(sentencies, astSentenceNode)
+
 	}
 
-	return nil, nil
+	return sentencies, nil
 }
 
 func (p *TreeSitterRefal5Parser) walkPattern(
@@ -144,12 +190,12 @@ func (p *TreeSitterRefal5Parser) walkPattern(
 
 	switch node.Type() {
 	case "ident":
-		return &ast.WordPattern{Value: node.Content(source)}, nil
+		return &ast.WordPatternNode{Value: node.Content(source)}, nil
 	case "string":
-		return &ast.StringPattern{Value: node.Content(source)}, nil
+		return &ast.StringPatternNode{Value: node.Content(source)}, nil
 	case "number":
 		val, _ := strconv.Atoi(node.Content(source))
-		return &ast.NumberPattern{Value: uint(val)}, nil
+		return &ast.NumberPatternNode{Value: uint(val)}, nil
 	case "variable":
 		varStrType := node.ChildByFieldName("type").Content(source)
 		varType := ast.SymbolVarType
@@ -159,12 +205,12 @@ func (p *TreeSitterRefal5Parser) walkPattern(
 		case "e":
 			varType = ast.ExprVarType
 		}
-		return &ast.VarPattern{
+		return &ast.VarPatternNode{
 			Name: node.ChildByFieldName("name").Content(source),
 			Type: varType,
 		}, nil
 	case "grouped_pattern":
-		pattern := &ast.GroupedPattern{Patterns: []ast.PatternNode{}}
+		pattern := &ast.GroupedPatternNode{Patterns: []ast.PatternNode{}}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
 			if !child.IsNamed() {
@@ -178,16 +224,134 @@ func (p *TreeSitterRefal5Parser) walkPattern(
 		}
 		return pattern, nil
 	case "symbols":
-		return &ast.CharactersPattern{Value: []byte(node.Content(source))}, nil
+		return &ast.CharactersPatternNode{Value: []byte(node.Content(source))}, nil
 	}
 
 	return nil, fmt.Errorf("undefined pattern")
 }
 
+func (p *TreeSitterRefal5Parser) walkResult(
+	node *sitter.Node,
+	source []byte,
+) (ast.ResultNode, error) {
+	// TODO: check node == nil
+	// var result ast.PatternNode
+
+	switch node.Type() {
+	case "ident":
+		return &ast.WordResultNode{Value: node.Content(source)}, nil
+	case "string":
+		return &ast.StringResultNode{Value: node.Content(source)}, nil
+	case "number":
+		val, _ := strconv.Atoi(node.Content(source))
+		return &ast.NumberResultNode{Value: uint(val)}, nil
+	case "variable":
+		varStrType := node.ChildByFieldName("type").Content(source)
+		varType := ast.SymbolVarType
+		switch varStrType {
+		case "t":
+			varType = ast.TermVarType
+		case "e":
+			varType = ast.ExprVarType
+		}
+		return &ast.VarResultNode{
+			Name: node.ChildByFieldName("name").Content(source),
+			Type: varType,
+		}, nil
+	case "grouped_result":
+		pattern := &ast.GroupedResultNode{Results: []ast.ResultNode{}}
+		for i := 0; i < int(node.ChildCount()); i++ {
+			child := node.Child(i)
+			if !child.IsNamed() {
+				continue
+			}
+
+			// TODO: check error
+			nestedResult, _ := p.walkResult(child, source)
+			pattern.Results = append(pattern.Results, nestedResult)
+
+		}
+		return pattern, nil
+	case "symbols":
+		return &ast.CharactersResultNode{Value: []byte(node.Content(source))}, nil
+	case "function_call":
+		functionCallNode := &ast.FunctionCallResultNode{
+			Ident: "",
+			Args:  []ast.ResultNode{},
+		}
+		nameNode := node.ChildByFieldName("name")
+		functionCallNode.Ident = nameNode.Content(source)
+
+		for i := 0; i < int(node.ChildCount()); i++ {
+			if node.FieldNameForChild(i) == "param" {
+				child := node.Child(i)
+				arg, _ := p.walkResult(child, source)
+				functionCallNode.Args = append(functionCallNode.Args, arg)
+			}
+		}
+
+		return functionCallNode, nil
+	}
+
+	return nil, fmt.Errorf("undefined result")
+}
+
+func (p *TreeSitterRefal5Parser) walkCondition(
+	condition *sitter.Node,
+	source []byte,
+) (*ast.ConditionNode, error) {
+	astConditionNode := &ast.ConditionNode{
+		Result:  []ast.ResultNode{},
+		Pattern: []ast.PatternNode{},
+	}
+
+	for i := 0; i < int(condition.ChildCount()); i++ {
+		conditionChild := condition.Child(i)
+		switch condition.FieldNameForChild(i) {
+		case "result":
+			result, _ := p.walkResult(conditionChild, source)
+			astConditionNode.Result = append(astConditionNode.Result, result)
+		case "pattern":
+			pattern, _ := p.walkPattern(conditionChild, source)
+			astConditionNode.Pattern = append(astConditionNode.Pattern, pattern)
+		}
+	}
+
+	return astConditionNode, nil
+}
+
 func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 	root *sitter.Node,
-) (*ast.FunctionNode, error) {
-	return nil, nil
+	source []byte,
+) ([]string, error) {
+	cursor := sitter.NewQueryCursor()
+	query, _ := sitter.NewQuery([]byte(`
+	(external_declaration
+		(external_modifier)
+		func_name_list: (function_name_list) @func_name_list
+	)`), tree_sitter_refal5.GetLanguage())
+
+	cursor.Exec(query, root)
+	externals := []string{}
+
+	for {
+		match, ok := cursor.NextMatch()
+		if !ok {
+			break
+		}
+
+		funcNameListNode := match.Captures[0].Node
+
+		for i := 0; i < int(funcNameListNode.ChildCount()); i++ {
+			child := funcNameListNode.Child(i)
+			if !child.IsNamed() {
+				continue
+			}
+			externals = append(externals, child.Content(source))
+		}
+	}
+
+	return externals, nil
 }
 
 func (p *TreeSitterRefal5Parser) walkSentence(node *sitter.Node) (*ast.SentenceNode, error) {

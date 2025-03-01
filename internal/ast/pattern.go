@@ -23,51 +23,51 @@ type PatternNode interface {
 	GetPatternType() PatternType
 }
 
-type CharactersPattern struct {
+type CharactersPatternNode struct {
 	Value []byte
 }
 
-func (*CharactersPattern) GetPatternType() PatternType {
+func (*CharactersPatternNode) GetPatternType() PatternType {
 	return CharactersPatternType
 }
 
-type WordPattern struct {
+type WordPatternNode struct {
 	Value string
 }
 
-func (*WordPattern) GetPatternType() PatternType {
+func (*WordPatternNode) GetPatternType() PatternType {
 	return WordPatternType
 }
 
-type NumberPattern struct {
+type NumberPatternNode struct {
 	Value uint
 }
 
-func (*NumberPattern) GetPatternType() PatternType {
+func (*NumberPatternNode) GetPatternType() PatternType {
 	return NumberPatternType
 }
 
-type StringPattern struct {
+type StringPatternNode struct {
 	Value string
 }
 
-func (*StringPattern) GetPatternType() PatternType {
+func (*StringPatternNode) GetPatternType() PatternType {
 	return StringPatternType
 }
 
-type VarPattern struct {
+type VarPatternNode struct {
 	Type VaribaleType
 	Name string
 }
 
-func (*VarPattern) GetPatternType() PatternType {
+func (*VarPatternNode) GetPatternType() PatternType {
 	return VarPatternType
 }
 
-type GroupedPattern struct {
+type GroupedPatternNode struct {
 	Patterns []PatternNode
 }
 
-func (*GroupedPattern) GetPatternType() PatternType {
+func (*GroupedPatternNode) GetPatternType() PatternType {
 	return GroupedPatternType
 }
