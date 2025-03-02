@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	astp "github.com/t1d333/refal5-tree/internal/ast"
 	"github.com/t1d333/refal5-tree/internal/parser"
@@ -59,9 +60,9 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 }
 
 func (c *Compiler) readFile(path string) ([]byte, error) {
-	file, err := os.ReadFile(path)
+	file, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %v", path, err)
+		return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 
 	return file, nil

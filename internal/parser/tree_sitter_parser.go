@@ -30,7 +30,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 	var cursor *sitter.QueryCursor
 	tree, err := p.parser.ParseCtx(context.Background(), nil, source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse source code: %v", err)
+		return nil, fmt.Errorf("failed to parse source code: %w", err)
 	}
 
 	root := tree.RootNode()
@@ -66,7 +66,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 		funcAstNode.Name = funcNameNode.Content(source)
 		sentences, err := p.walkFunctionBody(funcBodyNode, source)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build ast: %v", err)
+			return nil, fmt.Errorf("failed to build ast: %w", err)
 		}
 
 		funcAstNode.Body = sentences
@@ -84,6 +84,7 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 	source []byte,
 ) ([]*ast.SentenceNode, error) {
 	if node == nil {
+		return nil, fmt.Errorf("got nil node")
 	}
 
 	sentencies := []*ast.SentenceNode{}
@@ -309,10 +310,16 @@ func (p *TreeSitterRefal5Parser) walkCondition(
 		conditionChild := condition.Child(i)
 		switch condition.FieldNameForChild(i) {
 		case "result":
-			result, _ := p.walkResult(conditionChild, source)
+			result, err := p.walkResult(conditionChild, source)
+			if err != nil {
+				return nil, fmt.Errorf("failed to walk result in walkCondition: %w", err)
+			}
 			astConditionNode.Result = append(astConditionNode.Result, result)
 		case "pattern":
-			pattern, _ := p.walkPattern(conditionChild, source)
+			pattern, err := p.walkPattern(conditionChild, source)
+			if err != nil {
+				return nil, fmt.Errorf("failed to walk pattern in walkCondition: %w", err)
+			}
 			astConditionNode.Pattern = append(astConditionNode.Pattern, pattern)
 		}
 	}
@@ -325,11 +332,14 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 	source []byte,
 ) ([]string, error) {
 	cursor := sitter.NewQueryCursor()
-	query, _ := sitter.NewQuery([]byte(`
+	query, err := sitter.NewQuery([]byte(`
 	(external_declaration
 		(external_modifier)
 		func_name_list: (function_name_list) @func_name_list
 	)`), tree_sitter_refal5.GetLanguage())
+	if err != nil {
+		return nil, fmt.Errorf("failed to build sitter query in walkExternalDeclarations: %w", err)
+	}
 
 	cursor.Exec(query, root)
 	externals := []string{}
@@ -339,7 +349,6 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 		if !ok {
 			break
 		}
-
 		funcNameListNode := match.Captures[0].Node
 
 		for i := 0; i < int(funcNameListNode.ChildCount()); i++ {
@@ -352,10 +361,6 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 	}
 
 	return externals, nil
-}
-
-func (p *TreeSitterRefal5Parser) walkSentence(node *sitter.Node) (*ast.SentenceNode, error) {
-	return nil, nil
 }
 
 func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, error) {
