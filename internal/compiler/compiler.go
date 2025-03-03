@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/t1d333/refal5-tree/internal/ast"
 	astp "github.com/t1d333/refal5-tree/internal/ast"
 	"github.com/t1d333/refal5-tree/internal/parser"
 )
@@ -66,4 +67,10 @@ func (c *Compiler) readFile(path string) ([]byte, error) {
 	}
 
 	return file, nil
+}
+
+func (c *Compiler) Generate(trees []*ast.AST) (string, error) {
+	// TODO: find Go function and generate code for GO
+	// TODO: generate code for another functions
+	return "", nil
 }
