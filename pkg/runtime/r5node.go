@@ -70,5 +70,5 @@ func (n *R5NodeOpenCall) Type() R5Datatag {
 type R5NodeCloseCall struct{}
 
 func (n *R5NodeCloseCall) Type() R5Datatag {
-	return R5DatatagCloseBracket
+	return R5DatatagCloseCall
 }

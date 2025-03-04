@@ -73,8 +73,12 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 		result.Functions = append(result.Functions, funcAstNode)
 	}
 
-	declarations, _ := p.walkExternalDeclarations(root, source)
-	fmt.Println(declarations)
+	declarations, err := p.walkExternalDeclarations(root, source)
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk external declarations: %w", err)
+	}
+
+	result.ExternalDeclarations = declarations
 
 	return result, nil
 }
