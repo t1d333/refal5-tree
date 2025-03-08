@@ -101,3 +101,31 @@ func (r *Rope) Get(i int) R5Node {
 		}
 	}
 }
+
+func (r *Rope) Set(i int, data R5Node) {
+	curr := r.root
+
+	for {
+		if curr == nil {
+			return
+		}
+
+		switch curr.NodeType() {
+		case RopeNodeInnerType:
+			inner := curr.(*RopeNodeInner)
+			if inner.Left != nil && inner.Left.GetWeight() > i {
+				curr = inner.Left
+			} else {
+				curr = inner.Right
+				i -= inner.Left.GetWeight()
+			}
+		case RopeNodeLeafType:
+			leaf := curr.(*RopeNodeLeaf)
+			if len(leaf.Data) > i {
+				leaf.Data[i] = data
+			} else {
+				return
+			}
+		}
+	}
+}

@@ -30,30 +30,28 @@ import (
 var viewField *runtime.Rope
 
 func main() {
-	// init Go func call
+	// viewField = runtime.InitViewField()
 	// start main loop 
-	viewField = runtime.InitViewField()
 }`
 
 	compiledFunctionTmplString = `
-func r5t{{.Name}}_ (r *runtime.Rope) {
+func r5t{{.Name}}_ (arg *runtime.Rope) {
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
-	panic("Reognition failed")
+  panic("Reognition failed")
 }`
 
 	compiledSentenceTmplString = `
-for i := 0; i < 1; i++ {
+  for i := 0; i < 1; i++ {
 {{- range $name, $idxs := .VarsToIdxs }}
-	{{- range $place := $idxs }}
-	/* {{ $name }}: {{ index $place 0}} */
-	{{- end }}
+    /* {{ $name }}: {{- range $place := $idxs }} {{ index $place 0}} {{- end }} */
 {{- end }}
-	var p [{{ .VarsCount }}]*runtime.R5Node
-	print(p)
-	return;
-}`
+    var p [{{ .VarsArrSize }}]int
+		p[0] = 1
+		p[1] = arg.Len() - 1
+    return;
+  }`
 )
 
 type CompiledProgram struct {
@@ -67,8 +65,8 @@ type CompiledFunction struct {
 }
 
 type CompiledSentence struct {
-	VarsCount  int
-	VarsToIdxs map[string][][]int
+	VarsArrSize int
+	VarsToIdxs  map[string][][]int
 }
 
 type Compiler struct {
@@ -171,56 +169,75 @@ func (c *Compiler) GenerateFunctionBodyCode(f *ast.FunctionNode) ([]CompiledSent
 
 	for _, sentence := range f.Body {
 		// body = append(body, CompiledSentence{Value: fmt.Sprintf("  //Sentence #%d", i)})
-		compiledSentence := CompiledSentence{
-			VarsCount:  0,
-			VarsToIdxs: map[string][][]int{},
-		}
+		compiledSentence := c.GenerateSentence(sentence)
 
-		// sentence.Lhs.
-		varToIdx := map[string][][]int{}
-		idx := 0
-		for _, pattern := range sentence.Lhs {
-			switch pattern.GetPatternType() {
-			case ast.CharactersPatternType:
-			case ast.GroupedPatternType:
-			case ast.NumberPatternType:
-			case ast.StringPatternType:
-			case ast.VarPatternType:
-				varPattern, _ := pattern.(*ast.VarPatternNode)
-				idxs := []int{}
-				strType := ""
-				switch varPattern.Type {
-				case ast.ExprVarType:
-					idxs = append(idxs, idx, idx+1)
-					strType = "e"
-					idx += 2
-				case ast.SymbolVarType:
-					idxs = append(idxs, idx)
-					idx += 1
-					strType = "s"
-				case ast.TermVarType:
-					idxs = append(idxs, idx, idx+1)
-					idx += 2
-					strType = "t"
-					// default:
-					// panic(fmt.Sprintf("unexpected ast.VaribaleType: %#v", varPattern.Type))
-				}
-
-				ident := fmt.Sprintf("%s.%s", strType, varPattern.Name)
-				if _, ok := compiledSentence.VarsToIdxs[ident]; ok {
-					compiledSentence.VarsToIdxs[ident] = append(varToIdx[ident], idxs)
-				} else {
-					compiledSentence.VarsToIdxs[ident] = [][]int{idxs}
-				}
-			case ast.WordPatternType:
-			default:
-				panic("unexpected ast.PatternType")
-			}
-		}
-
-		compiledSentence.VarsCount = idx
 		body = append(body, compiledSentence)
 	}
 
 	return body, nil
+}
+
+func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence {
+	lhsPatterns := []ast.PatternNode{}
+
+	for _, pattern := range sentence.Lhs {
+		lhsPatterns = append(lhsPatterns, pattern)
+	}
+	compiledSentence := CompiledSentence{
+		VarsArrSize: 0,
+		VarsToIdxs:  map[string][][]int{},
+	}
+
+	idx := 2
+
+	for len(lhsPatterns) > 0 {
+		pattern := lhsPatterns[0]
+		lhsPatterns = lhsPatterns[1:]
+		switch pattern.GetPatternType() {
+		case ast.CharactersPatternType:
+		case ast.GroupedPatternType:
+			grouped := pattern.(*ast.GroupedPatternNode)
+			for _, tmp := range grouped.Patterns {
+				lhsPatterns = append([]ast.PatternNode{tmp}, lhsPatterns...)
+			}
+		case ast.NumberPatternType:
+		case ast.StringPatternType:
+		case ast.VarPatternType:
+			varPattern, _ := pattern.(*ast.VarPatternNode)
+			idxs := []int{}
+			strType := ""
+			switch varPattern.Type {
+			case ast.ExprVarType:
+				idxs = append(idxs, idx, idx+1)
+				strType = "e"
+				idx += 2
+			case ast.SymbolVarType:
+				idxs = append(idxs, idx)
+				idx += 1
+				strType = "s"
+			case ast.TermVarType:
+				idxs = append(idxs, idx, idx+1)
+				idx += 2
+				strType = "t"
+			}
+
+			ident := fmt.Sprintf("%s.%s", strType, varPattern.Name)
+			if _, ok := compiledSentence.VarsToIdxs[ident]; ok {
+				compiledSentence.VarsToIdxs[ident] = append(
+					compiledSentence.VarsToIdxs[ident],
+					idxs,
+				)
+			} else {
+				compiledSentence.VarsToIdxs[ident] = [][]int{idxs}
+			}
+
+		case ast.WordPatternType:
+		default:
+			panic("unexpected ast.PatternType")
+		}
+	}
+
+	compiledSentence.VarsArrSize = idx
+
+	return compiledSentence
 }
