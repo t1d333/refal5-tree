@@ -49,13 +49,17 @@ func (n *R5NodeFunction) Type() R5Datatag {
 	return R5DatatagFunction
 }
 
-type R5NodeOpenBracket struct{}
+type R5NodeOpenBracket struct {
+	CloseLink int
+}
 
 func (n *R5NodeOpenBracket) Type() R5Datatag {
 	return R5DatatagOpenBracket
 }
 
-type R5NodeCloseBracket struct{}
+type R5NodeCloseBracket struct {
+	OpenLink int
+}
 
 func (n *R5NodeCloseBracket) Type() R5Datatag {
 	return R5DatatagCloseBracket

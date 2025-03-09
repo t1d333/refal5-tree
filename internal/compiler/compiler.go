@@ -47,7 +47,7 @@ func r5t{{.Name}}_ (arg *runtime.Rope) {
 {{- range $name, $idxs := .VarsToIdxs }}
     /* {{ $name }}: {{- range $place := $idxs }} {{ index $place 0}} {{- end }} */
 {{- end }}
-    var p [{{ .VarsArrSize }}]int
+    var p []int = make([]int, {{ .VarsArrSize }})
 		p[0] = 1
 		p[1] = arg.Len() - 1
     return;
