@@ -2,6 +2,7 @@ package compiler
 
 import (
 	// "bytes"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,8 +31,8 @@ import (
 var viewField *runtime.Rope
 
 func main() {
-	// viewField = runtime.InitViewField()
-	// start main loop 
+	viewField = runtime.InitViewField()
+	runtime.StartMainLoop(viewField)
 }`
 
 	compiledFunctionTmplString = `
@@ -39,7 +40,7 @@ func r5t{{.Name}}_ (arg *runtime.Rope) {
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
-  panic("Reognition failed")
+  panic("Recognition failed")
 }`
 
 	compiledSentenceTmplString = `
@@ -50,9 +51,49 @@ func r5t{{.Name}}_ (arg *runtime.Rope) {
     var p []int = make([]int, {{ .VarsArrSize }})
 		p[0] = 1
 		p[1] = arg.Len() - 1
+
+{{- range $i, $cmd := .Commands}}
+    {{ $cmd }}
+{{- end}}
     return;
   }`
+
+	elementaryMatchCommandTmplString = `
+if (!runtime.R5t{{.NodeType}}{{.Side}}({{.Idx}}, {{.LeftBorder}}, {{.RightBorder}}, {{.Value}}, arg, p)) {
+	continue
+}
+
+`
 )
+
+type MatchCmdSideType string
+
+const (
+	LeftMatchCmdType  MatchCmdSideType = "Left"
+	RightMatchCmdType MatchCmdSideType = "Right"
+)
+
+type MatchCmdNodeType string
+
+const (
+	CharMatchCmdNodeType              MatchCmdNodeType = "Char"
+	BracketsMatchCmdNodeType          MatchCmdNodeType = "Brackets"
+	NumberMatchCmdNodeType            MatchCmdNodeType = "Number"
+	FunctionMatchCmdNodeType          MatchCmdNodeType = "Function"
+	SymbolVarMatchCmdNodeType         MatchCmdNodeType = "SymbolVar"
+	TermVarMatchCmdNodeType           MatchCmdNodeType = "TermVar"
+	RepeatedSymbolVarMatchCmdNodeType MatchCmdNodeType = "RepeatedSymbolVar"
+	RepeatedTermVarMatchCmdNodeType   MatchCmdNodeType = "RepeatedTermVar"
+)
+
+type MatchCommandArg struct {
+	NodeType    MatchCmdNodeType
+	Side        MatchCmdSideType
+	Idx         int
+	LeftBorder  int
+	RightBorder int
+	Value       string
+}
 
 type CompiledProgram struct {
 	Functions []CompiledFunction
@@ -67,6 +108,7 @@ type CompiledFunction struct {
 type CompiledSentence struct {
 	VarsArrSize int
 	VarsToIdxs  map[string][][]int
+	Commands    []string
 }
 
 type Compiler struct {
@@ -74,18 +116,21 @@ type Compiler struct {
 	compiledProgramTmpl  *template.Template
 	compiledFunctionTmpl *template.Template
 	compiledSentenceTmpl *template.Template
+	compiledMatchCmdTmpl *template.Template
 }
 
 func NewRefal5Compiler() *Compiler {
 	mainTmpl, _ := template.New("r5t-main").Parse(mainFileTmplString)
 	funcTmpl := template.Must(mainTmpl.New("r5t-func").Parse(compiledFunctionTmplString))
 	sentenceTmpl := template.Must(funcTmpl.New("r5t-sentence").Parse(compiledSentenceTmplString))
+	matchCmdTmpl, _ := template.New("r5t-match-cmd").Parse(elementaryMatchCommandTmplString)
 
 	compiler := &Compiler{
 		parser:               parser.NewTreeSitterRefal5Parser(),
 		compiledSentenceTmpl: sentenceTmpl,
 		compiledProgramTmpl:  mainTmpl,
 		compiledFunctionTmpl: funcTmpl,
+		compiledMatchCmdTmpl: matchCmdTmpl,
 	}
 
 	return compiler
@@ -177,15 +222,22 @@ func (c *Compiler) GenerateFunctionBodyCode(f *ast.FunctionNode) ([]CompiledSent
 	return body, nil
 }
 
+type patternHole struct {
+	patterns []ast.PatternNode
+	borders  [][]int
+}
+
 func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence {
 	lhsPatterns := []ast.PatternNode{}
 
 	for _, pattern := range sentence.Lhs {
 		lhsPatterns = append(lhsPatterns, pattern)
 	}
+
 	compiledSentence := CompiledSentence{
 		VarsArrSize: 0,
 		VarsToIdxs:  map[string][][]int{},
+		Commands:    []string{},
 	}
 
 	idx := 2
@@ -239,5 +291,177 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 	compiledSentence.VarsArrSize = idx
 
+	patternHoles := []patternHole{{
+		patterns: sentence.Lhs,
+		borders:  [][]int{{0, 1}},
+	}}
+
+	cmds := []string{}
+	nextBorder := 3
+
+	for len(patternHoles) > 0 {
+		hole := patternHoles[0]
+		patternHoles = patternHoles[1:]
+		patterns := hole.patterns
+
+		borders := hole.borders
+
+		for len(borders) > 0 {
+
+			left, right := borders[0][0], borders[0][1]
+			borders = borders[1:]
+
+			if len(patterns) == 0 {
+				fmt.Println("Empty hole", left, right, hole)
+				break
+			}
+
+			// TODO: check if left hole is symbol
+			if charNode, ok := patterns[0].(*ast.CharactersPatternNode); ok {
+				cmd := c.generateMatchCmd(MatchCommandArg{
+					NodeType:    CharMatchCmdNodeType,
+					Side:        LeftMatchCmdType,
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					Value:       fmt.Sprintf("'%c'", charNode.Value[0]),
+				})
+
+				charNode.Value = charNode.Value[1:]
+
+				if len(charNode.Value) == 0 {
+					patterns = patterns[1:]
+				}
+
+				borders = append([][]int{{nextBorder, right}}, borders...)
+				cmds = append(cmds, cmd)
+				nextBorder += 1
+				continue
+			}
+
+			// TODO: check if right hole is symbol
+			if charNode, ok := patterns[len(patterns)-1].(*ast.CharactersPatternNode); ok {
+				cmd := c.generateMatchCmd(MatchCommandArg{
+					NodeType:    CharMatchCmdNodeType,
+					Side:        RightMatchCmdType,
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					Value:       fmt.Sprintf("'%c'", charNode.Value[0]),
+				})
+
+				charNode.Value = charNode.Value[1:]
+
+				if len(charNode.Value) == 0 {
+					patterns = patterns[:len(patterns)-1]
+				}
+
+				borders = append([][]int{{left, nextBorder}}, borders...)
+				cmds = append(cmds, cmd)
+				nextBorder += 1
+				continue
+			}
+
+			// TODO: check if left hole is number
+			if numberNode, ok := patterns[0].(*ast.NumberPatternNode); ok {
+				cmd := c.generateMatchCmd(MatchCommandArg{
+					NodeType:    NumberMatchCmdNodeType,
+					Side:        LeftMatchCmdType,
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					Value:       fmt.Sprintf("%d", numberNode.Value),
+				})
+
+				patterns = patterns[1:]
+				borders = append([][]int{{nextBorder, right}}, borders...)
+				cmds = append(cmds, cmd)
+				nextBorder += 1
+				continue
+			}
+
+			// TODO: check if right hole is symbol
+			if numberNode, ok := patterns[len(patterns)-1].(*ast.NumberPatternNode); ok {
+				cmd := c.generateMatchCmd(MatchCommandArg{
+					NodeType:    CharMatchCmdNodeType,
+					Side:        RightMatchCmdType,
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					Value:       fmt.Sprintf("%d", numberNode.Value),
+				})
+
+				patterns = patterns[:len(patterns)-1]
+				borders = append([][]int{{left, nextBorder}}, borders...)
+				cmds = append(cmds, cmd)
+				nextBorder += 1
+				continue
+			}
+
+			// TODO: check if left hole is bracket
+			if grouped, ok := patterns[0].(*ast.GroupedPatternNode); ok {
+				cmd := c.generateMatchCmd(MatchCommandArg{
+					NodeType:    BracketsMatchCmdNodeType,
+					Side:        LeftMatchCmdType,
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					Value:       "",
+				})
+
+				patterns = patterns[1:]
+				patternHoles = append(patternHoles, patternHole{
+					patterns: grouped.Patterns,
+					borders:  [][]int{{nextBorder, nextBorder + 1}},
+				})
+				borders = append([][]int{{nextBorder + 1, right}}, borders...)
+				cmds = append(cmds, cmd)
+				nextBorder += 2
+				continue
+			}
+
+			// TODO: check if right hole is bracket
+			if grouped, ok := patterns[len(patterns)-1].(*ast.GroupedPatternNode); ok {
+				cmd := c.generateMatchCmd(MatchCommandArg{
+					NodeType:    BracketsMatchCmdNodeType,
+					Side:        RightMatchCmdType,
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					Value:       "",
+				})
+
+				patterns = patterns[:len(patterns)-1]
+				patternHoles = append(patternHoles, patternHole{
+					patterns: grouped.Patterns,
+					borders:  [][]int{{nextBorder, nextBorder + 1}},
+				})
+				borders = append([][]int{{left, nextBorder + 1}}, borders...)
+				cmds = append(cmds, cmd)
+				nextBorder += 2
+				continue
+			}
+
+			// TODO: check empty hole
+
+			// TODO: check repeated var left
+
+			// TODO: check repeated var right
+
+			// TODO: check close evar
+
+			// TODO: check new s ant t vars
+
+		}
+	}
+
+	compiledSentence.Commands = cmds
 	return compiledSentence
+}
+
+func (c *Compiler) generateMatchCmd(arg MatchCommandArg) string {
+	buff := bytes.Buffer{}
+	c.compiledMatchCmdTmpl.Execute(&buff, arg)
+
+	return buff.String()
 }

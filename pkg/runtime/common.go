@@ -156,7 +156,9 @@ func R5tBracketsLeft(i, left, right int, r *Rope, idxs []int) bool {
 		return false
 	}
 
+	bracketNode := nodeLeft.(*R5NodeOpenBracket)
 	idxs[i] = left
+	idxs[i+1] = bracketNode.CloseLink
 
 	return true
 }
@@ -174,7 +176,9 @@ func R5tBracketsRight(i, left, right int, r *Rope, idxs []int) bool {
 		return false
 	}
 
-	idxs[i] = right
+	bracketNode := nodeRight.(*R5NodeCloseBracket)
+	idxs[i] = bracketNode.OpenLink
+	idxs[i+1] = right
 
 	return true
 }
@@ -383,4 +387,8 @@ func equalNodes(lhs, rhs R5Node) bool {
 		// TODO: panic
 	}
 	return false
+}
+
+func StartMainLoop(viewField *Rope) error {
+	return nil
 }

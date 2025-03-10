@@ -229,7 +229,9 @@ func (p *TreeSitterRefal5Parser) walkPattern(
 		}
 		return pattern, nil
 	case "symbols":
-		return &ast.CharactersPatternNode{Value: []byte(node.Content(source))}, nil
+		chars := []byte(node.Content(source))[1:]
+		chars = chars[:len(chars)-1]
+		return &ast.CharactersPatternNode{Value: chars}, nil
 	}
 
 	return nil, fmt.Errorf("undefined pattern")
@@ -278,7 +280,9 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		}
 		return pattern, nil
 	case "symbols":
-		return &ast.CharactersResultNode{Value: []byte(node.Content(source))}, nil
+		chars := []byte(node.Content(source))[1:]
+		chars = chars[:len(chars)-1]
+		return &ast.CharactersResultNode{Value: chars}, nil
 	case "function_call":
 		functionCallNode := &ast.FunctionCallResultNode{
 			Ident: "",
