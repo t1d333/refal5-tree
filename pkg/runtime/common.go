@@ -1,7 +1,7 @@
 package runtime
 
-func R5tEmptyHole(i, j int, r *Rope) bool {
-	return i+1 == j
+func R5tEmpty(i, j int, r *Rope) bool {
+	return i+1 >= j
 }
 
 func R5tFunctionLeft(i, left, right int, function *R5Function, r *Rope, idxs []int) bool {
@@ -267,7 +267,7 @@ func R5tTermVarRight(i, left, right int, r *Rope, idxs []int) bool {
 	return true
 }
 
-func R5tRepeatedSymbolVarLeft(i, left, right int, sample R5Node, r *Rope, idxs []int) bool {
+func R5tRepeatedSymbolVarLeft(i, left, right, sample int, r *Rope, idxs []int) bool {
 	left += 1
 
 	if left >= right {
@@ -280,7 +280,9 @@ func R5tRepeatedSymbolVarLeft(i, left, right int, sample R5Node, r *Rope, idxs [
 		return false
 	}
 
-	if !equalNodes(leftNode, sample) {
+	sampleNode := r.Get(sample)
+
+	if !equalNodes(leftNode, sampleNode) {
 		return false
 	}
 
@@ -390,5 +392,23 @@ func equalNodes(lhs, rhs R5Node) bool {
 }
 
 func StartMainLoop(viewField *Rope) error {
+	callStack := [][]int{{0, viewField.Len() - 1}}
+
+	for len(callStack) > 0 {
+		tmp := callStack[0]
+		callStack = callStack[1:]
+		begin := tmp[0]
+		// end := tmp[0]
+		functionIdx := begin + 1
+
+		functionNode := viewField.Get(functionIdx)
+
+		if f, ok := functionNode.(*R5NodeFunction); ok {
+			f.Function.Ptr(viewField)
+		} else {
+			panic("Recognition Imposible")
+		}
+	}
+
 	return nil
 }

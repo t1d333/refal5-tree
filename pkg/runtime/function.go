@@ -1,6 +1,6 @@
 package runtime
 
-type R5FunctionPtr *func(*Rope)
+type R5FunctionPtr func(*Rope)
 
 type R5Function struct {
 	Name  string

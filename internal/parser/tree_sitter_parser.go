@@ -116,16 +116,17 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 		lhs := []ast.PatternNode{}
 
 		// walk lhs
-		for i := 0; i < int(sentenceLhsNode.ChildCount()); i++ {
-			lhsPartNode := sentenceLhsNode.Child(i)
+		if sentenceLhsNode != nil {
+			for i := 0; i < int(sentenceLhsNode.ChildCount()); i++ {
+				lhsPartNode := sentenceLhsNode.Child(i)
 
-			// TODO: check error
-			lhsPart, _ := p.walkPattern(lhsPartNode, source)
-			lhs = append(lhs, lhsPart)
+				// TODO: check error
+				lhsPart, _ := p.walkPattern(lhsPartNode, source)
+				lhs = append(lhs, lhsPart)
+			}
 		}
 
 		astSentenceNode.Lhs = lhs
-
 		// walk conditions
 
 		for j := 0; j < int(sentenceNode.ChildCount()); j++ {
