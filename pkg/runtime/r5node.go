@@ -50,7 +50,7 @@ func (n *R5NodeFunction) Type() R5Datatag {
 }
 
 type R5NodeOpenBracket struct {
-	CloseLink int
+	CloseOffset int
 }
 
 func (n *R5NodeOpenBracket) Type() R5Datatag {
@@ -58,7 +58,7 @@ func (n *R5NodeOpenBracket) Type() R5Datatag {
 }
 
 type R5NodeCloseBracket struct {
-	OpenLink int
+	OpenOffset int
 }
 
 func (n *R5NodeCloseBracket) Type() R5Datatag {

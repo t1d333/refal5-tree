@@ -74,6 +74,9 @@ if (!runtime.R5t{{.NodeType}}(p[{{.LeftBorder}}], p[{{.RightBorder}}], arg)) {
 }
 {{ else }}
 	{{if or (eq .NodeType "SymbolVar") (eq .NodeType "TermVar") }}
+		if (!runtime.R5t{{.NodeType}}{{.Side}}({{.Idx}}, p[{{.LeftBorder}}], p[{{.RightBorder}}], arg, p)) {
+			continue
+		}
 	{{ else }}
 		if (!runtime.R5t{{.NodeType}}{{.Side}}({{.Idx}}, p[{{.LeftBorder}}], p[{{.RightBorder}}]{{if ne .NodeType "Brackets" }}, {{.Value}}{{ end }}, arg, p)) {
 			continue
@@ -246,68 +249,11 @@ type patternHole struct {
 }
 
 func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence {
-	// lhsPatterns := []ast.PatternNode{}
-	//
-	// for _, pattern := range sentence.Lhs {
-	// 	lhsPatterns = append(lhsPatterns, pattern)
-	// }
-
 	compiledSentence := CompiledSentence{
 		VarsArrSize: 0,
 		VarsToIdxs:  map[string][][]int{},
 		Commands:    []string{},
 	}
-
-	// idx := 2
-	//
-	// for len(lhsPatterns) > 0 {
-	// 	pattern := lhsPatterns[0]
-	// 	lhsPatterns = lhsPatterns[1:]
-	// 	switch pattern.GetPatternType() {
-	// 	case ast.CharactersPatternType:
-	// 	case ast.GroupedPatternType:
-	// 		grouped := pattern.(*ast.GroupedPatternNode)
-	// 		for _, tmp := range grouped.Patterns {
-	// 			lhsPatterns = append([]ast.PatternNode{tmp}, lhsPatterns...)
-	// 		}
-	// 	case ast.NumberPatternType:
-	// 	case ast.StringPatternType:
-	// 	case ast.VarPatternType:
-	// 		varPattern, _ := pattern.(*ast.VarPatternNode)
-	// 		idxs := []int{}
-	// 		strType := ""
-	// 		switch varPattern.Type {
-	// 		case ast.ExprVarType:
-	// 			idxs = append(idxs, idx, idx+1)
-	// 			strType = "e"
-	// 			idx += 2
-	// 		case ast.SymbolVarType:
-	// 			idxs = append(idxs, idx)
-	// 			idx += 1
-	// 			strType = "s"
-	// 		case ast.TermVarType:
-	// 			idxs = append(idxs, idx, idx+1)
-	// 			idx += 2
-	// 			strType = "t"
-	// 		}
-	//
-	// 		ident := fmt.Sprintf("%s.%s", strType, varPattern.Name)
-	// 		if _, ok := compiledSentence.VarsToIdxs[ident]; ok {
-	// 			compiledSentence.VarsToIdxs[ident] = append(
-	// 				compiledSentence.VarsToIdxs[ident],
-	// 				idxs,
-	// 			)
-	// 		} else {
-	// 			compiledSentence.VarsToIdxs[ident] = [][]int{idxs}
-	// 		}
-	//
-	// 	case ast.WordPatternType:
-	// 	default:
-	// 		panic("unexpected ast.PatternType")
-	// 	}
-	// }
-
-	// compiledSentence.VarsArrSize = idx
 
 	patternHoles := []patternHole{{
 		patterns: sentence.Lhs,
@@ -329,27 +275,26 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 			left, right := borders[0][0], borders[0][1]
 			borders = borders[1:]
 
+			cmdArg := MatchCommandArg{
+				Idx:         nextBorder,
+				LeftBorder:  left,
+				RightBorder: right,
+			}
+
 			// TODO: check empty hole
 			if len(patterns) == 0 {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    EmptyNodeType,
-					LeftBorder:  left,
-					RightBorder: right,
-				})
+				cmdArg.NodeType = EmptyNodeType
+				cmd := c.generateMatchCmd(cmdArg)
 				cmds = append(cmds, cmd)
 				break
 			}
 
 			// TODO: check if left hole is symbol
 			if charNode, ok := patterns[0].(*ast.CharactersPatternNode); ok {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    CharMatchCmdNodeType,
-					Side:        LeftMatchCmdType,
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					Value:       fmt.Sprintf("'%c'", charNode.Value[0]),
-				})
+				cmdArg.NodeType = CharMatchCmdNodeType
+				cmdArg.Side = LeftMatchCmdType
+				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[0])
+				cmd := c.generateMatchCmd(cmdArg)
 
 				charNode.Value = charNode.Value[1:]
 
@@ -365,14 +310,10 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 			// TODO: check if right hole is symbol
 			if charNode, ok := patterns[len(patterns)-1].(*ast.CharactersPatternNode); ok {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    CharMatchCmdNodeType,
-					Side:        RightMatchCmdType,
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					Value:       fmt.Sprintf("'%c'", charNode.Value[0]),
-				})
+				cmdArg.NodeType = CharMatchCmdNodeType
+				cmdArg.Side = RightMatchCmdType
+				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[0])
+				cmd := c.generateMatchCmd(cmdArg)
 
 				charNode.Value = charNode.Value[1:]
 
@@ -388,14 +329,10 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 			// TODO: check if left hole is number
 			if numberNode, ok := patterns[0].(*ast.NumberPatternNode); ok {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    NumberMatchCmdNodeType,
-					Side:        LeftMatchCmdType,
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					Value:       fmt.Sprintf("%d", numberNode.Value),
-				})
+				cmdArg.NodeType = NumberMatchCmdNodeType
+				cmdArg.Side = LeftMatchCmdType
+				cmdArg.Value = fmt.Sprintf("%d", numberNode.Value)
+				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[1:]
 				borders = append([][]int{{nextBorder, right}}, borders...)
@@ -406,14 +343,11 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 			// TODO: check if right hole is symbol
 			if numberNode, ok := patterns[len(patterns)-1].(*ast.NumberPatternNode); ok {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    CharMatchCmdNodeType,
-					Side:        RightMatchCmdType,
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					Value:       fmt.Sprintf("%d", numberNode.Value),
-				})
+				cmdArg.NodeType = NumberMatchCmdNodeType
+				cmdArg.Side = RightMatchCmdType
+				cmdArg.Value = fmt.Sprintf("%d", numberNode.Value)
+
+				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[:len(patterns)-1]
 				borders = append([][]int{{left, nextBorder}}, borders...)
@@ -424,14 +358,9 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 			// TODO: check if left hole is bracket
 			if grouped, ok := patterns[0].(*ast.GroupedPatternNode); ok {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    BracketsMatchCmdNodeType,
-					Side:        LeftMatchCmdType,
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					Value:       "",
-				})
+				cmdArg.NodeType = BracketsMatchCmdNodeType
+				cmdArg.Side = LeftMatchCmdType
+				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[1:]
 				patternHoles = append(patternHoles, patternHole{
@@ -446,14 +375,9 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 			// TODO: check if right hole is bracket
 			if grouped, ok := patterns[len(patterns)-1].(*ast.GroupedPatternNode); ok {
-				cmd := c.generateMatchCmd(MatchCommandArg{
-					NodeType:    BracketsMatchCmdNodeType,
-					Side:        RightMatchCmdType,
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					Value:       "",
-				})
+				cmdArg.NodeType = BracketsMatchCmdNodeType
+				cmdArg.Side = RightMatchCmdType
+				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[:len(patterns)-1]
 				patternHoles = append(patternHoles, patternHole{
@@ -467,7 +391,22 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 			}
 
 			// TODO: check var left
-			if varNode, ok := patterns[0].(*ast.VarPatternNode); ok {
+
+			isVar := false
+			var varNode *ast.VarPatternNode
+
+			if tmp, ok := patterns[0].(*ast.VarPatternNode); ok {
+				isVar = true
+				cmdArg.Side = LeftMatchCmdType
+				varNode = tmp
+			} else if tmp, ok := patterns[len(patterns)-1].(*ast.VarPatternNode); ok {
+				isVar = true
+				cmdArg.Side = RightMatchCmdType
+				varNode = tmp
+			}
+
+			if isVar {
+
 				strType := ""
 				switch varNode.Type {
 				case ast.ExprVarType:
@@ -483,57 +422,40 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				if varIdxs, ok := compiledSentence.VarsToIdxs[ident]; ok {
 
 					// TODO: check repeated svar
-					cmdArg := MatchCommandArg{
-						Side:        LeftMatchCmdType,
-						Idx:         nextBorder,
-						LeftBorder:  left,
-						RightBorder: right,
-						Value:       fmt.Sprintf("p[%d]", (varIdxs[0][0])),
-					}
+					cmdArg.Value = fmt.Sprintf("p[%d]", (varIdxs[0][0]))
+
 					switch varNode.Type {
 					case ast.SymbolVarType:
 						cmdArg.NodeType = RepeatedSymbolVarMatchCmdNodeType
-						cmd := c.generateMatchCmd(cmdArg)
-						cmds = append(cmds, cmd)
 						compiledSentence.VarsToIdxs[ident] = append(
 							compiledSentence.VarsToIdxs[ident],
 							[]int{nextBorder},
 						)
 						nextBorder += 1
-						continue
 					case ast.TermVarType:
 						cmdArg.NodeType = RepeatedTermVarMatchCmdNodeType
-						cmd := c.generateMatchCmd(cmdArg)
-						cmds = append(cmds, cmd)
+
 						compiledSentence.VarsToIdxs[ident] = append(
 							compiledSentence.VarsToIdxs[ident],
 							[]int{nextBorder, nextBorder + 1},
 						)
 						nextBorder += 2
-						continue
 					}
+					cmd := c.generateMatchCmd(cmdArg)
+					cmds = append(cmds, cmd)
+					continue
 				} else {
-					cmdArg := MatchCommandArg{
-						NodeType:    SymbolVarMatchCmdNodeType,
-						Side:        LeftMatchCmdType,
-						Idx:         nextBorder,
-						LeftBorder:  left,
-						RightBorder: right,
-					}
 					switch varNode.Type {
 					case ast.SymbolVarType:
 						cmdArg.NodeType = SymbolVarMatchCmdNodeType
-						cmd := c.generateMatchCmd(cmdArg)
-						cmds = append(cmds, cmd)
 						nextBorder += 1
-						continue
 					case ast.TermVarType:
 						cmdArg.NodeType = TermVarMatchCmdNodeType
-						cmd := c.generateMatchCmd(cmdArg)
-						cmds = append(cmds, cmd)
 						nextBorder += 2
-						continue
 					}
+					cmd := c.generateMatchCmd(cmdArg)
+					cmds = append(cmds, cmd)
+					continue
 				}
 			}
 

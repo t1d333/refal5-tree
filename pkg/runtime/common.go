@@ -1,5 +1,7 @@
 package runtime
 
+import "fmt"
+
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -158,7 +160,7 @@ func R5tBracketsLeft(i, left, right int, r *Rope, idxs []int) bool {
 
 	bracketNode := nodeLeft.(*R5NodeOpenBracket)
 	idxs[i] = left
-	idxs[i+1] = bracketNode.CloseLink
+	idxs[i+1] = left + bracketNode.CloseOffset
 
 	return true
 }
@@ -177,7 +179,7 @@ func R5tBracketsRight(i, left, right int, r *Rope, idxs []int) bool {
 	}
 
 	bracketNode := nodeRight.(*R5NodeCloseBracket)
-	idxs[i] = bracketNode.OpenLink
+	idxs[i] = bracketNode.OpenOffset
 	idxs[i+1] = right
 
 	return true
@@ -235,7 +237,7 @@ func R5tTermVarLeft(i, left, right int, r *Rope, idxs []int) bool {
 	idxs[i] = left
 
 	if openBracketNode, ok := leftNode.(*R5NodeOpenBracket); ok {
-		idxs[i+1] = openBracketNode.CloseLink
+		idxs[i+1] = openBracketNode.CloseOffset
 	} else {
 		idxs[i+1] = left
 	}
@@ -259,7 +261,7 @@ func R5tTermVarRight(i, left, right int, r *Rope, idxs []int) bool {
 	idxs[i+1] = right
 
 	if closeBracketNode, ok := rightNode.(*R5NodeCloseBracket); ok {
-		idxs[i] = closeBracketNode.OpenLink
+		idxs[i] = closeBracketNode.OpenOffset
 	} else {
 		idxs[i] = right
 	}
@@ -408,6 +410,10 @@ func StartMainLoop(viewField *Rope) error {
 		} else {
 			panic("Recognition Imposible")
 		}
+	}
+
+	for i := 0; i < viewField.Len(); i++ {
+		fmt.Println(viewField.Get(i))
 	}
 
 	return nil
