@@ -73,7 +73,7 @@ if (!runtime.R5t{{.NodeType}}(p[{{.LeftBorder}}], p[{{.RightBorder}}], arg)) {
 	continue
 }
 {{ else }}
-	{{if or (eq .NodeType "SymbolVar") (eq .NodeType "TermVar") }}
+	{{if or (eq .NodeType "CloseExprVar") (or (eq .NodeType "SymbolVar") (eq .NodeType "TermVar")) }}
 		if (!runtime.R5t{{.NodeType}}{{.Side}}({{.Idx}}, p[{{.LeftBorder}}], p[{{.RightBorder}}], arg, p)) {
 			continue
 		}
@@ -84,6 +84,16 @@ if (!runtime.R5t{{.NodeType}}(p[{{.LeftBorder}}], p[{{.RightBorder}}], arg)) {
 	{{ end }}
 {{ end }}
 `
+	opeExprVarMatchCommandTmplString = `
+p[.Idx] = 
+p[.Idx + 1]
+for i := 0; i < 1
+
+{{ range $cmd := .Cmds }}
+{{ end }}
+
+	
+	`
 )
 
 type MatchCmdSideType string
@@ -103,7 +113,9 @@ const (
 	SymbolVarMatchCmdNodeType         MatchCmdNodeType = "SymbolVar"
 	TermVarMatchCmdNodeType           MatchCmdNodeType = "TermVar"
 	RepeatedSymbolVarMatchCmdNodeType MatchCmdNodeType = "RepeatedSymbolVar"
-	RepeatedTermVarMatchCmdNodeType   MatchCmdNodeType = "RepeatedTermVar"
+	RepeatedTermVarMatchCmdNodeType   MatchCmdNodeType = "RepeatedExprTermVar"
+	RepeatedExprVarMatchCmdNodeType   MatchCmdNodeType = "RepeatedExprTermVar"
+	CloseExprVarMatchCmdNodeType      MatchCmdNodeType = "CloseExprVar"
 	EmptyNodeType                     MatchCmdNodeType = "Empty"
 )
 
@@ -262,6 +274,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 	cmds := []string{}
 	nextBorder := 2
+	openEvalCycles := []int{}
 
 	for len(patternHoles) > 0 {
 		hole := patternHoles[0]
@@ -269,6 +282,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 		patterns := hole.patterns
 
 		borders := hole.borders
+		containsOpenEvar := false
 
 		for len(borders) > 0 {
 
@@ -399,15 +413,27 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				isVar = true
 				cmdArg.Side = LeftMatchCmdType
 				varNode = tmp
-			} else if tmp, ok := patterns[len(patterns)-1].(*ast.VarPatternNode); ok {
+			}
+
+			if tmp, ok := patterns[len(patterns)-1].(*ast.VarPatternNode); ok && isVar &&
+				varNode.Type == ast.ExprVarType {
 				isVar = true
 				cmdArg.Side = RightMatchCmdType
 				varNode = tmp
 			}
 
 			if isVar {
+				switch cmdArg.Side {
+				case LeftMatchCmdType:
+					patterns = patterns[1:]
+				case RightMatchCmdType:
+					patterns = patterns[:len(patterns)-1]
+				}
+			}
 
-				strType := ""
+			strType := ""
+
+			if isVar {
 				switch varNode.Type {
 				case ast.ExprVarType:
 					strType = "e"
@@ -416,13 +442,16 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				case ast.TermVarType:
 					strType = "t"
 				}
+			}
+
+			if isVar && (varNode.Type == ast.SymbolVarType || varNode.Type == ast.TermVarType) {
 
 				ident := fmt.Sprintf("%s.%s", strType, varNode.Name)
 				// check repeated var
 				if varIdxs, ok := compiledSentence.VarsToIdxs[ident]; ok {
 
 					// TODO: check repeated svar
-					cmdArg.Value = fmt.Sprintf("p[%d]", (varIdxs[0][0]))
+					cmdArg.Value = fmt.Sprintf("%d", (varIdxs[0][0]))
 
 					switch varNode.Type {
 					case ast.SymbolVarType:
@@ -431,6 +460,12 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 							compiledSentence.VarsToIdxs[ident],
 							[]int{nextBorder},
 						)
+						switch cmdArg.Side {
+						case LeftMatchCmdType:
+							borders = append([][]int{{nextBorder, right}}, borders...)
+						case RightMatchCmdType:
+							borders = append([][]int{{left, nextBorder}}, borders...)
+						}
 						nextBorder += 1
 					case ast.TermVarType:
 						cmdArg.NodeType = RepeatedTermVarMatchCmdNodeType
@@ -439,18 +474,40 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 							compiledSentence.VarsToIdxs[ident],
 							[]int{nextBorder, nextBorder + 1},
 						)
+						switch cmdArg.Side {
+						case LeftMatchCmdType:
+							borders = append([][]int{{nextBorder + 1, right}}, borders...)
+						case RightMatchCmdType:
+							borders = append([][]int{{left, nextBorder + 1}}, borders...)
+						}
 						nextBorder += 2
 					}
+
 					cmd := c.generateMatchCmd(cmdArg)
 					cmds = append(cmds, cmd)
 					continue
 				} else {
+
 					switch varNode.Type {
 					case ast.SymbolVarType:
 						cmdArg.NodeType = SymbolVarMatchCmdNodeType
+						compiledSentence.VarsToIdxs[ident] = append(varIdxs, []int{nextBorder})
+						switch cmdArg.Side {
+						case LeftMatchCmdType:
+							borders = append([][]int{{nextBorder, right}}, borders...)
+						case RightMatchCmdType:
+							borders = append([][]int{{left, nextBorder}}, borders...)
+						}
 						nextBorder += 1
 					case ast.TermVarType:
 						cmdArg.NodeType = TermVarMatchCmdNodeType
+						compiledSentence.VarsToIdxs[ident] = append(varIdxs, []int{nextBorder})
+						switch cmdArg.Side {
+						case LeftMatchCmdType:
+							borders = append([][]int{{nextBorder + 1, right}}, borders...)
+						case RightMatchCmdType:
+							borders = append([][]int{{left, nextBorder + 1}}, borders...)
+						}
 						nextBorder += 2
 					}
 					cmd := c.generateMatchCmd(cmdArg)
@@ -458,10 +515,48 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					continue
 				}
 			}
-
-			// TODO: check repeated var right
-
 			// TODO: check close evar
+
+			if isVar && (varNode.Type == ast.ExprVarType) && len(patterns) == 0 {
+				cmdArg := MatchCommandArg{
+					Idx:         nextBorder,
+					LeftBorder:  left,
+					RightBorder: right,
+					NodeType:    CloseExprVarMatchCmdNodeType,
+				}
+
+				cmd := c.generateMatchCmd(cmdArg)
+				cmds = append(cmds, cmd)
+				nextBorder += 2
+				continue
+			}
+
+			if isVar && varNode.Type == ast.ExprVarType {
+				ident := fmt.Sprintf("%s.%s", strType, varNode.Name)
+				// check repeated var
+				if varIdxs, ok := compiledSentence.VarsToIdxs[ident]; ok {
+					cmdArg.Value = fmt.Sprintf("%d", (varIdxs[0][0]))
+					cmdArg.NodeType = RepeatedExprVarMatchCmdNodeType
+
+					compiledSentence.VarsToIdxs[ident] = append(
+						compiledSentence.VarsToIdxs[ident],
+						[]int{nextBorder, nextBorder + 1},
+					)
+					switch cmdArg.Side {
+					case LeftMatchCmdType:
+						borders = append([][]int{{nextBorder + 1, right}}, borders...)
+					case RightMatchCmdType:
+						borders = append([][]int{{left, nextBorder + 1}}, borders...)
+					}
+					nextBorder += 2
+				} else {
+					// TODO: Open evar
+					containsOpenEvar = true
+				}
+
+			}
+
+			panic("Uknown pattern")
 		}
 
 	}

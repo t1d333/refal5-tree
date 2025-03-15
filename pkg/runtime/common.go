@@ -237,7 +237,7 @@ func R5tTermVarLeft(i, left, right int, r *Rope, idxs []int) bool {
 	idxs[i] = left
 
 	if openBracketNode, ok := leftNode.(*R5NodeOpenBracket); ok {
-		idxs[i+1] = openBracketNode.CloseOffset
+		idxs[i+1] = left + openBracketNode.CloseOffset
 	} else {
 		idxs[i+1] = left
 	}
@@ -261,7 +261,7 @@ func R5tTermVarRight(i, left, right int, r *Rope, idxs []int) bool {
 	idxs[i+1] = right
 
 	if closeBracketNode, ok := rightNode.(*R5NodeCloseBracket); ok {
-		idxs[i] = closeBracketNode.OpenOffset
+		idxs[i] = right - closeBracketNode.OpenOffset
 	} else {
 		idxs[i] = right
 	}
@@ -282,7 +282,7 @@ func R5tRepeatedSymbolVarLeft(i, left, right, sample int, r *Rope, idxs []int) b
 		return false
 	}
 
-	sampleNode := r.Get(sample)
+	sampleNode := r.Get(idxs[sample])
 
 	if !equalNodes(leftNode, sampleNode) {
 		return false
@@ -293,7 +293,7 @@ func R5tRepeatedSymbolVarLeft(i, left, right, sample int, r *Rope, idxs []int) b
 	return true
 }
 
-func R5tRepeatedSymbolVarRight(i, left, right int, sample R5Node, r *Rope, idxs []int) bool {
+func R5tRepeatedSymbolVarRight(i, left, right int, sample int, r *Rope, idxs []int) bool {
 	right -= 1
 
 	if left >= right {
@@ -306,7 +306,7 @@ func R5tRepeatedSymbolVarRight(i, left, right int, sample R5Node, r *Rope, idxs 
 		return false
 	}
 
-	if !equalNodes(rightNode, sample) {
+	if !equalNodes(rightNode, r.Get(idxs[sample])) {
 		return false
 	}
 
@@ -315,12 +315,14 @@ func R5tRepeatedSymbolVarRight(i, left, right int, sample R5Node, r *Rope, idxs 
 	return true
 }
 
-func R5tRepeatedTermVarLeft(i, left, right, sample int, r *Rope, idxs []int) bool {
+func R5tRepeatedExprTermVarLeft(i, left, right, sample int, r *Rope, idxs []int) bool {
 	curr := left + 1
 	limit := right
 
 	curr_sample := idxs[sample]
-	limit_sample := idxs[sample+1]
+	limit_sample := idxs[sample+1] + 1
+
+	fmt.Println("Idxs: ", curr, limit, curr_sample, limit_sample, idxs)
 
 	for curr != limit && curr_sample != limit_sample && equalNodes(r.Get(curr), r.Get(curr_sample)) {
 		curr += 1
@@ -336,7 +338,7 @@ func R5tRepeatedTermVarLeft(i, left, right, sample int, r *Rope, idxs []int) boo
 	return false
 }
 
-func R5tRepeatedTermVarRight(i, left, right, sample int, r *Rope, idxs []int) bool {
+func R5tRepeatedExprTermVarRight(i, left, right, sample int, r *Rope, idxs []int) bool {
 	curr := right - 1
 	limit := left
 
@@ -373,24 +375,51 @@ func equalNodes(lhs, rhs R5Node) bool {
 	switch lhs.Type() {
 	case R5DatatagChar:
 		lhsCharNode := lhs.(*R5NodeChar)
-		rhsCharNode := lhs.(*R5NodeChar)
+		rhsCharNode := rhs.(*R5NodeChar)
+		fmt.Println("Char nodes: ", lhsCharNode, rhsCharNode)
 		return lhsCharNode.Char == rhsCharNode.Char
 	case R5DatatagOpenBracket:
+		fmt.Println("Open bracket")
 		return true
 	case R5DatatagCloseBracket:
+		fmt.Println("Close bracket: ")
 		return true
 	case R5DatatagFunction:
 		lhsFunctionNode := lhs.(*R5NodeFunction)
-		rhsFunctionNode := lhs.(*R5NodeFunction)
+		rhsFunctionNode := rhs.(*R5NodeFunction)
 		return lhsFunctionNode.Function.Name == rhsFunctionNode.Function.Name
 	case R5DatatagNumber:
 		lhsNumberNode := lhs.(*R5NodeChar)
-		rhsNumberNode := lhs.(*R5NodeChar)
+		rhsNumberNode := rhs.(*R5NodeChar)
 		return lhsNumberNode.Char == rhsNumberNode.Char
 	default:
 		// TODO: panic
 	}
 	return false
+}
+
+func R5tCloseExprVar(i, left, right int, r *Rope, idxs []int) bool {
+	idxs[i] = left + 1
+	idxs[i+1] = right - 1
+	return true
+}
+
+// int r05_open_evar_advance(struct r05_node **evar, struct r05_node *right) {
+//   struct r05_node *term[2];
+//
+//   if (r05_tvar_left(term, evar[1], right)) {
+//     evar[1] = term[1];
+//     return 1;
+//   } else {
+//     return 0;
+//   }
+// }
+func R5tOpenEvarAdvance(i, left, right, r *Rope, idxs []int) bool {
+	tmp := make([]int, 2)
+
+	// if R5tTermVarLeft(0, )
+	
+	return true
 }
 
 func StartMainLoop(viewField *Rope) error {
