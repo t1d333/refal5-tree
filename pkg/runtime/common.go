@@ -404,22 +404,25 @@ func R5tCloseExprVar(i, left, right int, r *Rope, idxs []int) bool {
 	return true
 }
 
-// int r05_open_evar_advance(struct r05_node **evar, struct r05_node *right) {
-//   struct r05_node *term[2];
+//	int r05_open_evar_advance(struct r05_node **evar, struct r05_node *right) {
+//	  struct r05_node *term[2];
 //
-//   if (r05_tvar_left(term, evar[1], right)) {
-//     evar[1] = term[1];
-//     return 1;
-//   } else {
-//     return 0;
-//   }
-// }
-func R5tOpenEvarAdvance(i, left, right, r *Rope, idxs []int) bool {
-	tmp := make([]int, 2)
+//	  if (r05_tvar_left(term, evar[1], right)) {
+//	    evar[1] = term[1];
+//	    return 1;
+//	  } else {
+//	    return 0;
+//	  }
+//	}
+func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
+	term := make([]int, 2)
 
-	// if R5tTermVarLeft(0, )
-	
-	return true
+	if R5tTermVarLeft(0, idxs[i+1], right, r, term) {
+		idxs[i+1] = term[1]
+		return true
+	}
+
+	return false
 }
 
 func StartMainLoop(viewField *Rope) error {

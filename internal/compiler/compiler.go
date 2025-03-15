@@ -64,7 +64,9 @@ func r5t{{.Name}}_ (arg *runtime.Rope) {
     {{ $cmd }}
 {{- end}}
 		fmt.Println("Successfully recognized")
-    return;
+		{{ if .NeedLoopReturn }}
+			return
+		{{ end }}
   }`
 
 	elementaryMatchCommandTmplString = `
@@ -82,18 +84,18 @@ if (!runtime.R5t{{.NodeType}}(p[{{.LeftBorder}}], p[{{.RightBorder}}], arg)) {
 			continue
 		}
 	{{ end }}
-{{ end }}
-`
-	opeExprVarMatchCommandTmplString = `
-p[.Idx] = 
-p[.Idx + 1]
-for i := 0; i < 1
-
-{{ range $cmd := .Cmds }}
-{{ end }}
-
-	
-	`
+{{ end }}`
+	openExprVarLoopMatchCommandTmplString = `
+p[{{ .Idx }}] = p[{{ .Left }}] + 1 
+p[{{ .Idx }} + 1] = p[{{ .Left }}]
+for end := true; end; end = runtime.R5tOpenEvarAdvance({{ .Idx }}, p[{{ .Right }}], arg, p) {
+	{{ range $cmd := .Cmds }}
+		{{ $cmd }}
+	{{ end }}	
+	{{ if .NeedReturn }}
+		return
+	{{ end }}
+}`
 )
 
 type MatchCmdSideType string
@@ -119,13 +121,21 @@ const (
 	EmptyNodeType                     MatchCmdNodeType = "Empty"
 )
 
-type MatchCommandArg struct {
+type MatchCmdArg struct {
 	NodeType    MatchCmdNodeType
 	Side        MatchCmdSideType
 	Idx         int
 	LeftBorder  int
 	RightBorder int
 	Value       string
+}
+
+type ExprVarLoopCmdArg struct {
+	Idx        int
+	Left       int
+	Right      int
+	Cmds       []string
+	NeedReturn bool
 }
 
 type CompiledProgram struct {
@@ -139,17 +149,19 @@ type CompiledFunction struct {
 }
 
 type CompiledSentence struct {
-	VarsArrSize int
-	VarsToIdxs  map[string][][]int
-	Commands    []string
+	VarsArrSize    int
+	VarsToIdxs     map[string][][]int
+	Commands       []string
+	NeedLoopReturn bool
 }
 
 type Compiler struct {
-	parser               parser.Refal5Parser
-	compiledProgramTmpl  *template.Template
-	compiledFunctionTmpl *template.Template
-	compiledSentenceTmpl *template.Template
-	compiledMatchCmdTmpl *template.Template
+	parser                    parser.Refal5Parser
+	compiledProgramTmpl       *template.Template
+	compiledFunctionTmpl      *template.Template
+	compiledSentenceTmpl      *template.Template
+	compiledMatchCmdTmpl      *template.Template
+	compileOpenExprVarCmdTmpl *template.Template
 }
 
 func NewRefal5Compiler() *Compiler {
@@ -157,13 +169,16 @@ func NewRefal5Compiler() *Compiler {
 	funcTmpl := template.Must(mainTmpl.New("r5t-func").Parse(compiledFunctionTmplString))
 	sentenceTmpl := template.Must(funcTmpl.New("r5t-sentence").Parse(compiledSentenceTmplString))
 	matchCmdTmpl, _ := template.New("r5t-match-cmd").Parse(elementaryMatchCommandTmplString)
+	openExprVarLoopTmpl, _ := template.New("r5t-open-evar-loop-cmd").
+		Parse(openExprVarLoopMatchCommandTmplString)
 
 	compiler := &Compiler{
-		parser:               parser.NewTreeSitterRefal5Parser(),
-		compiledSentenceTmpl: sentenceTmpl,
-		compiledProgramTmpl:  mainTmpl,
-		compiledFunctionTmpl: funcTmpl,
-		compiledMatchCmdTmpl: matchCmdTmpl,
+		parser:                    parser.NewTreeSitterRefal5Parser(),
+		compiledSentenceTmpl:      sentenceTmpl,
+		compiledProgramTmpl:       mainTmpl,
+		compiledFunctionTmpl:      funcTmpl,
+		compiledMatchCmdTmpl:      matchCmdTmpl,
+		compileOpenExprVarCmdTmpl: openExprVarLoopTmpl,
 	}
 
 	return compiler
@@ -260,11 +275,19 @@ type patternHole struct {
 	borders  [][]int
 }
 
+type exprVarLoop struct {
+	Idx   int
+	Left  int
+	Right int
+	Cmds  []string
+}
+
 func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence {
 	compiledSentence := CompiledSentence{
-		VarsArrSize: 0,
-		VarsToIdxs:  map[string][][]int{},
-		Commands:    []string{},
+		VarsArrSize:    0,
+		VarsToIdxs:     map[string][][]int{},
+		Commands:       []string{},
+		NeedLoopReturn: true,
 	}
 
 	patternHoles := []patternHole{{
@@ -274,7 +297,6 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 	cmds := []string{}
 	nextBorder := 2
-	openEvalCycles := []int{}
 
 	for len(patternHoles) > 0 {
 		hole := patternHoles[0]
@@ -282,14 +304,15 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 		patterns := hole.patterns
 
 		borders := hole.borders
-		containsOpenEvar := false
+		// containsOpenEvar := false
+		exprVarLoops := []exprVarLoop{}
 
 		for len(borders) > 0 {
 
 			left, right := borders[0][0], borders[0][1]
 			borders = borders[1:]
 
-			cmdArg := MatchCommandArg{
+			cmdArg := MatchCmdArg{
 				Idx:         nextBorder,
 				LeftBorder:  left,
 				RightBorder: right,
@@ -299,7 +322,15 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 			if len(patterns) == 0 {
 				cmdArg.NodeType = EmptyNodeType
 				cmd := c.generateMatchCmd(cmdArg)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
+
 				break
 			}
 
@@ -317,7 +348,14 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				}
 
 				borders = append([][]int{{nextBorder, right}}, borders...)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 				nextBorder += 1
 				continue
 			}
@@ -336,7 +374,14 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				}
 
 				borders = append([][]int{{left, nextBorder}}, borders...)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 				nextBorder += 1
 				continue
 			}
@@ -350,7 +395,14 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 				patterns = patterns[1:]
 				borders = append([][]int{{nextBorder, right}}, borders...)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 				nextBorder += 1
 				continue
 			}
@@ -365,7 +417,14 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 				patterns = patterns[:len(patterns)-1]
 				borders = append([][]int{{left, nextBorder}}, borders...)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 				nextBorder += 1
 				continue
 			}
@@ -382,7 +441,14 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					borders:  [][]int{{nextBorder, nextBorder + 1}},
 				})
 				borders = append([][]int{{nextBorder + 1, right}}, borders...)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 				nextBorder += 2
 				continue
 			}
@@ -399,54 +465,59 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					borders:  [][]int{{nextBorder, nextBorder + 1}},
 				})
 				borders = append([][]int{{left, nextBorder + 1}}, borders...)
-				cmds = append(cmds, cmd)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 				nextBorder += 2
 				continue
 			}
 
 			// TODO: check var left
 
-			isVar := false
 			var varNode *ast.VarPatternNode
 
-			if tmp, ok := patterns[0].(*ast.VarPatternNode); ok {
-				isVar = true
+			// check left
+
+			leftVarNode := patterns[0].(*ast.VarPatternNode)
+			rightVarNode := patterns[len(patterns)-1].(*ast.VarPatternNode)
+
+			needLeft := false
+			needRight := false
+			if leftVarNode != nil {
+				if leftVarNode.Type == ast.SymbolVarType || leftVarNode.Type == ast.TermVarType {
+					needLeft = true
+				} else if _, ok := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", leftVarNode.GetVarTypeStr(), leftVarNode.Name)]; ok {
+					needLeft = true
+				}
+			}
+
+			if rightVarNode != nil {
+				if rightVarNode.Type == ast.SymbolVarType || leftVarNode.Type == ast.TermVarType {
+					needRight = true
+				} else if _, ok := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", rightVarNode.GetVarTypeStr(), rightVarNode.Name)]; ok {
+					needRight = true
+				}
+			}
+
+			if needLeft || !needRight {
 				cmdArg.Side = LeftMatchCmdType
-				varNode = tmp
-			}
-
-			if tmp, ok := patterns[len(patterns)-1].(*ast.VarPatternNode); ok && isVar &&
-				varNode.Type == ast.ExprVarType {
-				isVar = true
+				varNode = leftVarNode
+				patterns = patterns[1:]
+			} else if needRight {
 				cmdArg.Side = RightMatchCmdType
-				varNode = tmp
+				varNode = rightVarNode
+				patterns = patterns[:len(patterns)-1]
 			}
 
-			if isVar {
-				switch cmdArg.Side {
-				case LeftMatchCmdType:
-					patterns = patterns[1:]
-				case RightMatchCmdType:
-					patterns = patterns[:len(patterns)-1]
-				}
-			}
+			if varNode != nil &&
+				(varNode.Type == ast.SymbolVarType || varNode.Type == ast.TermVarType) {
 
-			strType := ""
-
-			if isVar {
-				switch varNode.Type {
-				case ast.ExprVarType:
-					strType = "e"
-				case ast.SymbolVarType:
-					strType = "s"
-				case ast.TermVarType:
-					strType = "t"
-				}
-			}
-
-			if isVar && (varNode.Type == ast.SymbolVarType || varNode.Type == ast.TermVarType) {
-
-				ident := fmt.Sprintf("%s.%s", strType, varNode.Name)
+				ident := fmt.Sprintf("%s.%s", varNode.GetVarTypeStr(), varNode.Name)
 				// check repeated var
 				if varIdxs, ok := compiledSentence.VarsToIdxs[ident]; ok {
 
@@ -484,7 +555,14 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					}
 
 					cmd := c.generateMatchCmd(cmdArg)
-					cmds = append(cmds, cmd)
+					if len(exprVarLoops) > 0 {
+						exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+							exprVarLoops[len(exprVarLoops)-1].Cmds,
+							cmd,
+						)
+					} else {
+						cmds = append(cmds, cmd)
+					}
 					continue
 				} else {
 
@@ -511,28 +589,17 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 						nextBorder += 2
 					}
 					cmd := c.generateMatchCmd(cmdArg)
-					cmds = append(cmds, cmd)
+					if len(exprVarLoops) > 0 {
+						exprVarLoops[len(exprVarLoops)-1].Cmds = append(exprVarLoops[len(exprVarLoops)-1].Cmds, cmd)
+					} else {
+						cmds = append(cmds, cmd)
+					}
 					continue
 				}
 			}
-			// TODO: check close evar
 
-			if isVar && (varNode.Type == ast.ExprVarType) && len(patterns) == 0 {
-				cmdArg := MatchCommandArg{
-					Idx:         nextBorder,
-					LeftBorder:  left,
-					RightBorder: right,
-					NodeType:    CloseExprVarMatchCmdNodeType,
-				}
-
-				cmd := c.generateMatchCmd(cmdArg)
-				cmds = append(cmds, cmd)
-				nextBorder += 2
-				continue
-			}
-
-			if isVar && varNode.Type == ast.ExprVarType {
-				ident := fmt.Sprintf("%s.%s", strType, varNode.Name)
+			if varNode != nil && varNode.Type == ast.ExprVarType {
+				ident := fmt.Sprintf("%s.%s", varNode.GetVarTypeStr(), varNode.Name)
 				// check repeated var
 				if varIdxs, ok := compiledSentence.VarsToIdxs[ident]; ok {
 					cmdArg.Value = fmt.Sprintf("%d", (varIdxs[0][0]))
@@ -548,17 +615,84 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					case RightMatchCmdType:
 						borders = append([][]int{{left, nextBorder + 1}}, borders...)
 					}
+					cmd := c.generateMatchCmd(cmdArg)
+
+					if len(exprVarLoops) > 0 {
+						exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+							exprVarLoops[len(exprVarLoops)-1].Cmds,
+							cmd,
+						)
+					} else {
+						cmds = append(cmds, cmd)
+					}
+					// borders = append([][]int{{nextBorder + 1, right}}, borders...)
 					nextBorder += 2
+					continue
+				} else if len(patterns) == 0 {
+					cmdArg := MatchCmdArg{
+						Idx:         nextBorder,
+						LeftBorder:  left,
+						RightBorder: right,
+						NodeType:    CloseExprVarMatchCmdNodeType,
+					}
+
+					cmd := c.generateMatchCmd(cmdArg)
+					if len(exprVarLoops) > 0 {
+						exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+							exprVarLoops[len(exprVarLoops)-1].Cmds,
+							cmd,
+						)
+					} else {
+						cmds = append(cmds, cmd)
+					}
+					nextBorder += 2
+					fmt.Println("========1111111", borders)
+					continue
 				} else {
 					// TODO: Open evar
-					containsOpenEvar = true
+					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder, nextBorder + 1}}
+					exprVarLoops = append(exprVarLoops, exprVarLoop{
+						Idx:   nextBorder,
+						Left:  left,
+						Right: right,
+						Cmds:  []string{},
+					})
+					borders = append([][]int{{nextBorder + 1, right}}, borders...)
+					nextBorder += 2
+					continue
 				}
 
 			}
-
 			panic("Uknown pattern")
 		}
 
+		prevLoopCmd := ""
+		for i := len(exprVarLoops) - 1; i >= 0; i -= 1 {
+			buff := bytes.Buffer{}
+			loop := exprVarLoops[i]
+
+			if prevLoopCmd != "" {
+				loop.Cmds = append(loop.Cmds, prevLoopCmd)
+			}
+
+			tmplArg := ExprVarLoopCmdArg{
+				Idx:        loop.Idx,
+				Left:       loop.Left,
+				Right:      loop.Right,
+				Cmds:       loop.Cmds,
+				NeedReturn: i == (len(exprVarLoops) - 1),
+			}
+
+			c.compileOpenExprVarCmdTmpl.Execute(&buff, tmplArg)
+
+			prevLoopCmd = buff.String()
+		}
+
+		if prevLoopCmd != "" {
+			compiledSentence.NeedLoopReturn = false
+		}
+
+		cmds = append(cmds, prevLoopCmd)
 	}
 
 	compiledSentence.VarsArrSize = nextBorder
@@ -566,7 +700,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 	return compiledSentence
 }
 
-func (c *Compiler) generateMatchCmd(arg MatchCommandArg) string {
+func (c *Compiler) generateMatchCmd(arg MatchCmdArg) string {
 	buff := bytes.Buffer{}
 	c.compiledMatchCmdTmpl.Execute(&buff, arg)
 

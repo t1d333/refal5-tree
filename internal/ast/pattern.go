@@ -64,6 +64,18 @@ func (*VarPatternNode) GetPatternType() PatternType {
 	return VarPatternType
 }
 
+func (v *VarPatternNode) GetVarTypeStr() string {
+	switch v.Type {
+	case ExprVarType:
+		return "e"
+	case SymbolVarType:
+		return "s"
+	case TermVarType:
+		return "t"
+	}
+	return ""
+}
+
 type GroupedPatternNode struct {
 	Patterns []PatternNode
 }
