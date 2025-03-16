@@ -695,6 +695,24 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 		cmds = append(cmds, prevLoopCmd)
 	}
 
+	// TODO: build result
+
+	sentenceRhs := sentence.Rhs.(*ast.SentenceRhsResultNode)
+
+	for _, r := range sentenceRhs.Result {
+		switch r.GetResultType() {
+		case ast.CharactersResultType:
+			
+		case ast.FunctionCallResultType:
+		case ast.VarResultType:
+		case ast.NumberResultType:
+		case ast.GroupedResultType:
+		// case ast.WordResultType:
+		// case ast.StringResultType:
+
+		}
+	}
+
 	compiledSentence.VarsArrSize = nextBorder
 	compiledSentence.Commands = cmds
 	return compiledSentence

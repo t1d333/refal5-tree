@@ -10,7 +10,7 @@ func InitViewField(gofunc *R5Function) *Rope {
 			Function: gofunc,
 		},
 		&R5NodeChar{
-			Char: '3',
+			Char: '8',
 		},
 		&R5NodeChar{
 			Char: '3',
@@ -22,13 +22,13 @@ func InitViewField(gofunc *R5Function) *Rope {
 			Char: '3',
 		},
 		&R5NodeChar{
-			Char: '3',
-		},
-		&R5NodeChar{
-			Char: '3',
+			Char: '8',
 		},
 		&R5NodeChar{
 			Char: '8',
+		},
+		&R5NodeChar{
+			Char: '3',
 		},
 		&R5NodeCloseCall{
 			OpenOffset: 8,
