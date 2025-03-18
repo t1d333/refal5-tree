@@ -2,10 +2,6 @@ package runtime
 
 import "fmt"
 
-// import (
-// 	"fmt"
-// )
-
 type RopeNodeType int
 
 const (
@@ -142,8 +138,6 @@ func (r *Rope) Split(i int) (*Rope, *Rope) {
 	path := []RopeNode{}
 	curr := r.root
 
-	fmt.Println("-------", i)
-
 	for {
 		switch curr.NodeType() {
 		case RopeNodeInnerType:
@@ -153,11 +147,12 @@ func (r *Rope) Split(i int) (*Rope, *Rope) {
 				curr = inner.Left
 			} else {
 				curr = inner.Right
-				i -= inner.Left.GetWeight()
+				if inner.Left != nil {
+					i -= inner.Left.GetWeight()
+				}
 			}
 		case RopeNodeLeafType:
 			leaf := curr.(*RopeNodeLeaf)
-			fmt.Println(leaf.Data[:i], leaf.Data[i:])
 			var prevLhsNode RopeNode = &RopeNodeLeaf{
 				Data: leaf.Data[:i],
 			}
@@ -211,17 +206,17 @@ func (r *Rope) Insert(i int, data []R5Node) {
 	if i == 0 {
 		tmp = tmp.Concat(*r)
 		r.root = tmp.root
-		fmt.Println("Root in split", r.Len())
 		return
 	}
 
-	if i == r.Len()-1 {
+	if i == r.Len() {
 		tmp = r.Concat(tmp)
 		r.root = tmp.root
 		return
 	}
 
 	tmpLhs, tmpRhs := r.Split(i)
+	fmt.Println("1111", r.Len(), tmpLhs.Len(), tmpRhs.Len())
 	tmp = tmpLhs.Concat(tmp)
 	tmp = tmp.Concat(*tmpRhs)
 	r.root = tmp.root
@@ -232,7 +227,6 @@ func (r *Rope) Delete(i int) {
 		return
 	}
 
-	fmt.Println("++++++++++++", i)
 	tmpLhs, _ := r.Split(i)
 
 	if i == r.Len()-1 {
@@ -241,7 +235,6 @@ func (r *Rope) Delete(i int) {
 	}
 
 	_, tmpRhs := r.Split(i + 1)
-	fmt.Println("Left: ", tmpLhs.Len(), "Right: ", tmpRhs.Len())
 
 	tmp := tmpLhs.Concat(*tmpRhs)
 	r.root = tmp.root

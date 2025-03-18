@@ -16,6 +16,44 @@ type ResultNode interface {
 	GetResultType() ResultType
 }
 
+func GetResultLengthInRuntimeNodes(r ResultNode) int {
+	stack := []ResultNode{r}
+	length := 0
+
+	for len(stack) > 0 {
+		curr := stack[0]
+		stack = stack[1:]
+
+		switch curr.GetResultType() {
+		case CharactersResultType:
+			node := curr.(*CharactersResultNode)
+			length += len(node.Value)
+		// case WordResultType:
+		// case StringResultType:
+		case FunctionCallResultType:
+			// + open call + func + close call
+			node := curr.(*FunctionCallResultNode)
+			length += 3
+			for _, arg := range node.Args {
+				length += GetResultLengthInRuntimeNodes(arg)
+			}
+		case NumberResultType:
+			length += 1
+		case VarResultType:
+			length += 1
+		case GroupedResultType:
+			node := curr.(*GroupedResultNode)
+			length += 2
+			for _, r := range node.Results {
+				length += GetResultLengthInRuntimeNodes(r)
+			}
+
+		}
+	}
+
+	return length
+}
+
 type CharactersResultNode struct {
 	Value []byte
 }

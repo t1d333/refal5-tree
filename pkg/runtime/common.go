@@ -432,13 +432,13 @@ func StartMainLoop(viewField *Rope) error {
 		tmp := callStack[0]
 		callStack = callStack[1:]
 		begin := tmp[0]
-		// end := tmp[0]
+		end := tmp[0]
 		functionIdx := begin + 1
 
 		functionNode := viewField.Get(functionIdx)
 
 		if f, ok := functionNode.(*R5NodeFunction); ok {
-			f.Function.Ptr(viewField)
+			f.Function.Ptr(begin, end, viewField)
 		} else {
 			panic("Recognition Imposible")
 		}

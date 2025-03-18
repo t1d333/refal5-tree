@@ -44,7 +44,7 @@ func main() {
 }`
 
 	compiledFunctionTmplString = `
-func r5t{{.Name}}_ (arg *runtime.Rope) {
+func r5t{{.Name}}_ (l, r int, arg *runtime.Rope) {
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
@@ -57,8 +57,8 @@ func r5t{{.Name}}_ (arg *runtime.Rope) {
     /* {{ $name }}: {{- range $place := $idxs }} {{ index $place 0}} {{- end }} */
 {{- end }}
     var p []int = make([]int, {{ .VarsArrSize }})
-		p[0] = 1
-		p[1] = arg.Len() - 1
+		p[0] = l
+		p[1] = r
 
 {{- range $i, $cmd := .Commands}}
     {{ $cmd }}
@@ -96,6 +96,13 @@ for end := true; end; end = runtime.R5tOpenEvarAdvance({{ .Idx }}, p[{{ .Right }
 		return
 	{{ end }}
 }`
+	buildResultCommandTmplString = `
+	var result Rope* = runtime.NewRope([]R5Node{}) 
+	{{ range $cmd := .Cmds }}
+		{{ $cmd }}
+		return
+	{{ end }}
+`
 )
 
 type MatchCmdSideType string
@@ -136,6 +143,10 @@ type ExprVarLoopCmdArg struct {
 	Right      int
 	Cmds       []string
 	NeedReturn bool
+}
+
+type BuildResultCmdArg struct {
+	Cmds []string
 }
 
 type CompiledProgram struct {
@@ -699,23 +710,102 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 	sentenceRhs := sentence.Rhs.(*ast.SentenceRhsResultNode)
 
+	buildResultCmds := []string{}
 	for _, r := range sentenceRhs.Result {
-		switch r.GetResultType() {
-		case ast.CharactersResultType:
-			
-		case ast.FunctionCallResultType:
-		case ast.VarResultType:
-		case ast.NumberResultType:
-		case ast.GroupedResultType:
-		// case ast.WordResultType:
-		// case ast.StringResultType:
-
+		if vNode, ok := r.(*ast.VarResultNode); ok {
+			// TODO: copy subrope from view field
+			fmt.Println(vNode)
+		} else {
+			buildResultCmds = append(buildResultCmds, c.buildResultCmds(r)...)
 		}
 	}
+
+	for _, cmd := range buildResultCmds {
+		fmt.Println("CMD==========", cmd)
+	}
+
+	cmds = append(cmds)
+	// TODO: update offsets and insert builded result rope
 
 	compiledSentence.VarsArrSize = nextBorder
 	compiledSentence.Commands = cmds
 	return compiledSentence
+}
+
+func (c *Compiler) buildResultCmds(node ast.ResultNode) []string {
+	switch node.GetResultType() {
+	case ast.CharactersResultType:
+		cNode := node.(*ast.CharactersResultNode)
+		cmd := "result.Insert(result.Len(), []runtime.R5Node{"
+		for _, c := range cNode.Value {
+			cmd += fmt.Sprintf("runtime.R5NodeChar{Char: %d}, ", c)
+		}
+		return []string{cmd + "})\n"}
+	case ast.FunctionCallResultType:
+		fNode := node.(*ast.FunctionCallResultNode)
+		callOffset := 2
+		fCmds := []string{}
+		for _, arg := range fNode.Args {
+			callOffset += ast.GetResultLengthInRuntimeNodes(arg)
+			fCmds = append(fCmds, c.buildResultCmds(arg)...)
+		}
+
+		fCmds = append(fCmds, fmt.Sprintf(
+			"result.Insert(result.Len(), runtime.R5NodeCloseCall{OpenOffset: %d})\n",
+			callOffset))
+
+		fCmds = append([]string{
+			fmt.Sprintf(
+				"result.Insert(result.Len(), runtime.R5NodeOpenCall{CloseOffset: %d})\n",
+				callOffset,
+			),
+
+			fmt.Sprintf(
+				"result.Insert(result.Len(), runtime.R5NodeFunction{Function: &runtime.R5Function{Name: %s, Entry: %t, Ptr: r5t%s }})",
+				fNode.Ident,
+				false,
+				fNode.Ident,
+			),
+		}, fCmds...)
+
+		return fCmds
+	case ast.NumberResultType:
+		nNode := node.(*ast.NumberResultNode)
+
+		return []string{
+			fmt.Sprintf(
+				"result.Insert(result.Len(), runtime.R5NodeNumber{Number: %d})",
+				nNode.Value,
+			),
+		}
+	case ast.GroupedResultType:
+		gNode := node.(*ast.GroupedResultNode)
+		bracketsOffset := 1
+		gCmds := []string{}
+
+		for _, r := range gNode.Results {
+			bracketsOffset += ast.GetResultLengthInRuntimeNodes(r)
+			gCmds = append(gCmds, c.buildResultCmds(r)...)
+		}
+
+		gCmds = append(
+			gCmds,
+			fmt.Sprintf(
+				"result.Insert(result.Len(), runtime.R5NodeOpenBracket{CloseOffset: %d})",
+				bracketsOffset,
+			),
+		)
+
+		gCmds = append(
+			[]string{fmt.Sprintf(
+				"result.Insert(result.Len(), runtime.R5NodeOpenBracket{CloseOffset: %d})",
+				bracketsOffset,
+			)},
+			gCmds...)
+
+		return gCmds
+	}
+	return []string{}
 }
 
 func (c *Compiler) generateMatchCmd(arg MatchCmdArg) string {
