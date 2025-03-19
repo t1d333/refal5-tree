@@ -266,7 +266,7 @@ func (p *TreeSitterRefal5Parser) walkResult(
 			Name: node.ChildByFieldName("name").Content(source),
 			Type: varType,
 		}, nil
-	case "grouped_result":
+	case "grouped_expr":
 		pattern := &ast.GroupedResultNode{Results: []ast.ResultNode{}}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
@@ -303,6 +303,7 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		return functionCallNode, nil
 	}
 
+	
 	return nil, fmt.Errorf("undefined result")
 }
 

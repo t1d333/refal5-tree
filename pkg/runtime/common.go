@@ -322,8 +322,6 @@ func R5tRepeatedExprTermVarLeft(i, left, right, sample int, r *Rope, idxs []int)
 	curr_sample := idxs[sample]
 	limit_sample := idxs[sample+1] + 1
 
-	fmt.Println("Idxs: ", curr, limit, curr_sample, limit_sample, idxs)
-
 	for curr != limit && curr_sample != limit_sample && equalNodes(r.Get(curr), r.Get(curr_sample)) {
 		curr += 1
 		curr_sample += 1
@@ -376,13 +374,10 @@ func equalNodes(lhs, rhs R5Node) bool {
 	case R5DatatagChar:
 		lhsCharNode := lhs.(*R5NodeChar)
 		rhsCharNode := rhs.(*R5NodeChar)
-		fmt.Println("Char nodes: ", lhsCharNode, rhsCharNode)
 		return lhsCharNode.Char == rhsCharNode.Char
 	case R5DatatagOpenBracket:
-		fmt.Println("Open bracket")
 		return true
 	case R5DatatagCloseBracket:
-		fmt.Println("Close bracket: ")
 		return true
 	case R5DatatagFunction:
 		lhsFunctionNode := lhs.(*R5NodeFunction)
@@ -426,27 +421,117 @@ func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 }
 
 func StartMainLoop(viewField *Rope) error {
-	callStack := [][]int{{0, viewField.Len() - 1}}
+	callStack := [][]int{{1, viewField.Len() - 2}}
 
 	for len(callStack) > 0 {
 		tmp := callStack[0]
 		callStack = callStack[1:]
 		begin := tmp[0]
-		end := tmp[0]
-		functionIdx := begin + 1
+		end := tmp[1]
 
-		functionNode := viewField.Get(functionIdx)
+		functionNode := viewField.Get(begin + 1)
 
 		if f, ok := functionNode.(*R5NodeFunction); ok {
-			f.Function.Ptr(begin, end, viewField)
+			f.Function.Ptr(begin+1, end, viewField)
 		} else {
 			panic("Recognition Imposible")
 		}
 	}
+	return nil
+}
 
+func PrintViewField(viewField *Rope) {
+	fmt.Print("ViewField{")
 	for i := 0; i < viewField.Len(); i++ {
-		fmt.Println(viewField.Get(i))
+		node := viewField.Get(i)
+		switch node.Type() {
+		case R5DatatagChar:
+			charNode := node.(*R5NodeChar)
+			fmt.Printf("(Char: %c), ", charNode.Char)
+		case R5DatatagCloseBracket:
+			closeBrNode := node.(*R5NodeCloseBracket)
+			fmt.Printf("(CloseBracket, OpenOffset: %d), ", closeBrNode.OpenOffset)
+		case R5DatatagCloseCall:
+			closeCallNode := node.(*R5NodeCloseCall)
+			fmt.Printf("(CloseCall, OpenOffset: %d), ", closeCallNode.OpenOffset)
+		case R5DatatagFunction:
+			funcNode := node.(*R5NodeFunction)
+			fmt.Printf("(Function: %s), ", funcNode.Function.Name)
+		case R5DatatagIllegal:
+			fmt.Printf("(Illegal), ")
+		case R5DatatagNumber:
+			numberNode := node.(*R5NodeNumber)
+			fmt.Printf("(Number: %d), ", numberNode.Number)
+		case R5DatatagOpenBracket:
+			openBrNode := node.(*R5NodeOpenBracket)
+			fmt.Printf("(OpenBracket, CloseOffset: %d), ", openBrNode.CloseOffset)
+		case R5DatatagOpenCall:
+			openCallNode := node.(*R5NodeOpenCall)
+			fmt.Printf("(OpenCall, CloseOffset: %d), ", openCallNode.CloseOffset)
+		}
+	}
+	fmt.Print("}")
+}
+
+func UpdateOffsets(l, r, diff int, viewField *Rope) {
+	openBrStack := []int{}
+	openCallStack := []int{}
+
+	for i := 0; i < l; i++ {
+		node := viewField.Get(i)
+		if node.Type() == R5DatatagOpenBracket {
+			openBrStack = append(openBrStack, i)
+		} else if node.Type() == R5DatatagCloseBracket {
+			openBrStack = openBrStack[:len(openBrStack)-1]
+		} else if node.Type() == R5DatatagOpenCall {
+			openCallStack = append(openCallStack, i)
+		} else if node.Type() == R5DatatagCloseCall {
+			openCallStack = openCallStack[:len(openCallStack)-1]
+		}
 	}
 
-	return nil
+	for _, i := range openBrStack {
+		node := viewField.Get(i).(*R5NodeOpenBracket)
+		node.CloseOffset += diff
+	}
+
+	for _, i := range openCallStack {
+		node := viewField.Get(i).(*R5NodeOpenCall)
+		node.CloseOffset += diff
+	}
+
+	openBrStack = []int{}
+	openCallStack = []int{}
+	unpairedCloseCall := []int{}
+	unpairedCloseBr := []int{}
+	for i := l + 1; i < viewField.Len(); i++ {
+		node := viewField.Get(i)
+		if node.Type() == R5DatatagOpenBracket {
+			openBrStack = append(openBrStack, i)
+		} else if node.Type() == R5DatatagCloseBracket {
+			if len(openBrStack) == 0 {
+				unpairedCloseBr = append(unpairedCloseBr, i)
+			} else {
+				openBrStack = openBrStack[:len(openBrStack)-1]
+			}
+		} else if node.Type() == R5DatatagOpenCall {
+			openCallStack = append(openCallStack, i)
+		} else if node.Type() == R5DatatagCloseCall {
+			if len(openCallStack) == 0 {
+				unpairedCloseCall = append(unpairedCloseCall, i)
+			} else {
+				openCallStack = openCallStack[:len(openCallStack)-1]
+			}
+		}
+	}
+
+	for _, i := range unpairedCloseBr {
+		node := viewField.Get(i).(*R5NodeCloseBracket)
+		node.OpenOffset += diff
+	}
+
+	for _, i := range unpairedCloseCall {
+		node := viewField.Get(i).(*R5NodeCloseCall)
+		node.OpenOffset += diff
+	}
 }

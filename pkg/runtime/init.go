@@ -3,6 +3,9 @@ package runtime
 // (('3' '5')) 5 ('2' '5') '2' '4'
 func InitViewField(gofunc *R5Function) *Rope {
 	rope := NewRope([]R5Node{
+		&R5NodeOpenBracket{
+			CloseOffset: 11,
+		},
 		&R5NodeOpenCall{
 			CloseOffset: 8,
 		},
@@ -33,6 +36,9 @@ func InitViewField(gofunc *R5Function) *Rope {
 		&R5NodeCloseCall{
 			OpenOffset: 8,
 		},
+		&R5NodeCloseBracket{
+			OpenOffset: 11,
+		},
 	})
-	return &rope
+	return rope
 }

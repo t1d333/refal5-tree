@@ -52,15 +52,15 @@ func (n *RopeNodeInner) GetWeight() int {
 	return n.Weight
 }
 
-func NewRope(n []R5Node) Rope {
-	return Rope{
+func NewRope(n []R5Node) *Rope {
+	return &Rope{
 		root: &RopeNodeLeaf{
 			Data: n,
 		},
 	}
 }
 
-func (r *Rope) Concat(other Rope) Rope {
+func (r *Rope) Concat(other *Rope) *Rope {
 	newRoot := &RopeNodeInner{
 		Weight: r.root.GetWeight() + other.root.GetWeight(),
 		Left:   r.root,
@@ -69,7 +69,7 @@ func (r *Rope) Concat(other Rope) Rope {
 	newRoot.Left = r.root
 	newRoot.Right = other.root
 	res := Rope{root: newRoot}
-	return res
+	return &res
 }
 
 func (r *Rope) Get(i int) R5Node {
@@ -204,7 +204,7 @@ func (r *Rope) Insert(i int, data []R5Node) {
 	tmp := NewRope(data)
 
 	if i == 0 {
-		tmp = tmp.Concat(*r)
+		tmp = tmp.Concat(r)
 		r.root = tmp.root
 		return
 	}
@@ -218,7 +218,7 @@ func (r *Rope) Insert(i int, data []R5Node) {
 	tmpLhs, tmpRhs := r.Split(i)
 	fmt.Println("1111", r.Len(), tmpLhs.Len(), tmpRhs.Len())
 	tmp = tmpLhs.Concat(tmp)
-	tmp = tmp.Concat(*tmpRhs)
+	tmp = tmp.Concat(tmpRhs)
 	r.root = tmp.root
 }
 
@@ -236,6 +236,6 @@ func (r *Rope) Delete(i int) {
 
 	_, tmpRhs := r.Split(i + 1)
 
-	tmp := tmpLhs.Concat(*tmpRhs)
+	tmp := tmpLhs.Concat(tmpRhs)
 	r.root = tmp.root
 }
