@@ -1,7 +1,5 @@
 package runtime
 
-import "fmt"
-
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -138,6 +136,52 @@ func R5tNumberRight(i, left, right int, n R5Number, r *Rope, idxs []int) bool {
 
 	numberNode := nodeRight.(*R5NodeNumber)
 	if numberNode.Number != n {
+		return false
+	}
+
+	idxs[i] = right
+
+	return true
+}
+
+func R5tStringLeft(i, left, right int, str string, r *Rope, idxs []int) bool {
+	left += 1
+
+	if left >= right {
+		return false
+	}
+
+	leftNode := r.Get(left)
+
+	if leftNode == nil || leftNode.Type() != R5DatatagString {
+		return false
+	}
+
+	strNode := leftNode.(*R5NodeString)
+	if strNode.String != str {
+		return false
+	}
+
+	idxs[i] = left
+
+	return true
+}
+
+func R5tStringRight(i, left, right int, str string, r *Rope, idxs []int) bool {
+	right -= 1
+
+	if left >= right {
+		return false
+	}
+
+	node := r.Get(right)
+
+	if node == nil || node.Type() != R5DatatagString {
+		return false
+	}
+
+	strNode := node.(*R5NodeString)
+	if strNode.String != str {
 		return false
 	}
 
@@ -420,57 +464,63 @@ func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 	return false
 }
 
-func StartMainLoop(viewField *Rope) error {
-	callStack := [][]int{{1, viewField.Len() - 2}}
+func StartMainLoop(initViewField []ViewFieldNode) error {
+	viewFieldLhs := []ViewFieldNode{}
+	viewFieldRhs := initViewField
 
-	for len(callStack) > 0 {
-		tmp := callStack[0]
-		callStack = callStack[1:]
-		begin := tmp[0]
-		end := tmp[1]
+	for len(viewFieldRhs) > 0 {
+		curr := viewFieldRhs[0]
+		viewFieldRhs = viewFieldRhs[1:]
 
-		functionNode := viewField.Get(begin + 1)
+		switch curr.Type() {
+		case CloseCallType:
+			argRope := viewFieldLhs[len(viewFieldLhs)-1].(*RopeViewFieldNode).Value
+			openCall := viewFieldLhs[len(viewFieldLhs)-2].(*OpenCallViewFieldNode)
+			viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-2]
 
-		if f, ok := functionNode.(*R5NodeFunction); ok {
-			f.Function.Ptr(begin+1, end, viewField)
-		} else {
-			panic("Recognition Imposible")
+			openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
+		case OpenCallType:
+			viewFieldLhs = append(viewFieldLhs, curr)
+		case RopeType:
+			if len(viewFieldLhs) == 0 {
+				viewFieldLhs = append(viewFieldLhs, curr)
+				continue
+			}
+
+			lastLhs := viewFieldLhs[len(viewFieldLhs)-1]
+			if lastLhs.Type() == RopeType {
+				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-1]
+				lhsRope := lastLhs.(*RopeViewFieldNode)
+				rhsRope := curr.(*RopeViewFieldNode)
+				viewFieldLhs = append(
+					viewFieldLhs,
+					&RopeViewFieldNode{Value: lhsRope.Value.Concat(rhsRope.Value)},
+				)
+			} else {
+				viewFieldLhs = append(viewFieldLhs, curr)
+			}
+
+		default:
+			panic("unexpected runtime.ViewFieldNodeType")
 		}
 	}
+
+	PrintViewField(viewFieldLhs)
+	// for len(callStack) > 0 {
+	// 	tmp := callStack[0]
+	// 	callStack = callStack[1:]
+	// 	begin := tmp[0]
+	// 	end := tmp[1]
+	//
+	// 	functionNode := viewField.Get(begin + 1)
+	//
+	// 	if f, ok := functionNode.(*R5NodeFunction); ok {
+	// 		f.Function.Ptr(begin+1, end, viewField)
+	// 	} else {
+	// 		panic("Recognition Imposible")
+	// 	}
+	// }
 	return nil
-}
-
-func PrintViewField(viewField *Rope) {
-	fmt.Print("ViewField{")
-	for i := 0; i < viewField.Len(); i++ {
-		node := viewField.Get(i)
-		switch node.Type() {
-		case R5DatatagChar:
-			charNode := node.(*R5NodeChar)
-			fmt.Printf("(Char: %c), ", charNode.Char)
-		case R5DatatagCloseBracket:
-			closeBrNode := node.(*R5NodeCloseBracket)
-			fmt.Printf("(CloseBracket, OpenOffset: %d), ", closeBrNode.OpenOffset)
-		case R5DatatagCloseCall:
-			closeCallNode := node.(*R5NodeCloseCall)
-			fmt.Printf("(CloseCall, OpenOffset: %d), ", closeCallNode.OpenOffset)
-		case R5DatatagFunction:
-			funcNode := node.(*R5NodeFunction)
-			fmt.Printf("(Function: %s), ", funcNode.Function.Name)
-		case R5DatatagIllegal:
-			fmt.Printf("(Illegal), ")
-		case R5DatatagNumber:
-			numberNode := node.(*R5NodeNumber)
-			fmt.Printf("(Number: %d), ", numberNode.Number)
-		case R5DatatagOpenBracket:
-			openBrNode := node.(*R5NodeOpenBracket)
-			fmt.Printf("(OpenBracket, CloseOffset: %d), ", openBrNode.CloseOffset)
-		case R5DatatagOpenCall:
-			openCallNode := node.(*R5NodeOpenCall)
-			fmt.Printf("(OpenCall, CloseOffset: %d), ", openCallNode.CloseOffset)
-		}
-	}
-	fmt.Print("}")
 }
 
 func UpdateOffsets(l, r, diff int, viewField *Rope) {
@@ -534,4 +584,26 @@ func UpdateOffsets(l, r, diff int, viewField *Rope) {
 		node := viewField.Get(i).(*R5NodeCloseCall)
 		node.OpenOffset += diff
 	}
+}
+
+func BuildOpenCallViewFieldNode(f R5Function, viewField *[]ViewFieldNode) {
+	*viewField = append(*viewField, &OpenCallViewFieldNode{Function: f})
+}
+
+func BuildCloseCallViewFieldNode(viewField *[]ViewFieldNode) {
+	*viewField = append(*viewField, &CloseCallViewFieldNode{})
+}
+
+func BuildRopeViewFieldNode(r *Rope, viewField *[]ViewFieldNode) {
+	*viewField = append(*viewField, &RopeViewFieldNode{Value: r})
+}
+
+func CopyExprTermVar(l, r int, src, dst *Rope) {
+	for i := l; i <= r; i++ {
+		dst.Insert(dst.Len(), []R5Node{src.Get(i)})
+	}
+}
+
+func CopySymbolVar(i int, src, dst *Rope) {
+	dst.Insert(dst.Len(), []R5Node{src.Get(i)})
 }

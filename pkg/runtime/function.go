@@ -1,6 +1,6 @@
 package runtime
 
-type R5FunctionPtr func(l, r int, arg *Rope)
+type R5FunctionPtr func(l, r int, arg *Rope, rhsStack *[]ViewFieldNode)
 
 type R5Function struct {
 	Name  string

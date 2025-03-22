@@ -28,8 +28,10 @@ func GetResultLengthInRuntimeNodes(r ResultNode) int {
 		case CharactersResultType:
 			node := curr.(*CharactersResultNode)
 			length += len(node.Value)
-		// case WordResultType:
-		// case StringResultType:
+		case WordResultType:
+			length += 1
+		case StringResultType:
+			length += 1
 		case FunctionCallResultType:
 			// + open call + func + close call
 			node := curr.(*FunctionCallResultNode)
@@ -88,8 +90,20 @@ func (*NumberResultNode) GetResultType() ResultType {
 }
 
 type VarResultNode struct {
-	Type VaribaleType
+	Type VariableType
 	Name string
+}
+
+func (v *VarResultNode) GetVarTypeStr() string {
+	switch v.Type {
+	case ExprVarType:
+		return "e"
+	case SymbolVarType:
+		return "s"
+	case TermVarType:
+		return "t"
+	}
+	return ""
 }
 
 type StringResultNode struct {

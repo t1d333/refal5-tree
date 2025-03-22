@@ -29,7 +29,7 @@ import (
 {{- end }}
 
 // Rope with view field
-var viewField *runtime.Rope
+var viewField []runtime.ViewFieldNode
 
 func main() {
 
@@ -44,7 +44,7 @@ func main() {
 }`
 
 	compiledFunctionTmplString = `
-func r5t{{.Name}}_ (l, r int, arg *runtime.Rope) {
+func r5t{{.Name}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
@@ -63,16 +63,14 @@ func r5t{{.Name}}_ (l, r int, arg *runtime.Rope) {
 {{- range $i, $cmd := .Commands}}
     {{ $cmd }}
 {{- end}}
-		{{ if .NeedLoopReturn }}
+		{{ if not .NeedLoopReturn }}
 			result := runtime.NewRope([]runtime.R5Node{}) 
 			{{ range $cmd := .BuildResultCmds }}
 				{{ $cmd }}
 			{{ end }}
-			lhs, _ := arg.Split(l - 1)
-			_, rhs := arg.Split(r + 1)
-			lhs = lhs.Concat(result)
-			*arg = *lhs.Concat(rhs)
-			runtime.PrintViewField(arg)
+			if result.Len() > 0 {
+				runtime.BuildRopeViewFieldNode(result, viewFieldRhs)
+			}
 			return
 		{{ end }}
   }`
@@ -105,27 +103,13 @@ for end := true; end; end = runtime.R5tOpenEvarAdvance({{ .Idx }}, p[{{ .Right }
 		{{ range $cmd := .BuildResultCmds }}
 			{{ $cmd }}
 		{{ end }}
-		lhs, _ := arg.Split(l - 1)
-		_, rhs := arg.Split(r + 1)
-		lhs = lhs.Concat(result)
-		*arg = *lhs.Concat(rhs)
-		runtime.PrintViewField(arg)
+		
+		if result.Len() > 0 {
+			runtime.BuildRopeViewFieldNode(result, viewFieldRhs)
+		}
 		return
 	{{ end }}
 }`
-	buildResultCommandTmplString = `
-	result := runtime.NewRope([]runtime.R5Node{}) 
-	{{ range $cmd := .Cmds }}
-		{{ $cmd }}
-	{{ end }}
-	
-	runtime.UpdateOffsets(l-1, r, result.Len()-(r-l+2), arg)
-	lhs, _ := arg.Split(l - 1)
-	_, rhs := arg.Split(r + 1)
-	lhs = lhs.Concat(result)
-	*arg = lhs.Concat(rhs)
-	return
-`
 )
 
 type MatchCmdSideType string
@@ -141,6 +125,7 @@ const (
 	CharMatchCmdNodeType              MatchCmdNodeType = "Char"
 	BracketsMatchCmdNodeType          MatchCmdNodeType = "Brackets"
 	NumberMatchCmdNodeType            MatchCmdNodeType = "Number"
+	StringMatchCmdNodeType            MatchCmdNodeType = "String"
 	FunctionMatchCmdNodeType          MatchCmdNodeType = "Function"
 	SymbolVarMatchCmdNodeType         MatchCmdNodeType = "SymbolVar"
 	TermVarMatchCmdNodeType           MatchCmdNodeType = "TermVar"
@@ -184,11 +169,11 @@ type CompiledFunction struct {
 }
 
 type CompiledSentence struct {
-	VarsArrSize         int
-	VarsToIdxs          map[string][][]int
-	Commands            []string
-	BuildResultCommands []string
-	NeedLoopReturn      bool
+	VarsArrSize     int
+	VarsToIdxs      map[string][][]int
+	Commands        []string
+	BuildResultCmds []string
+	NeedLoopReturn  bool
 }
 
 type Compiler struct {
@@ -198,7 +183,6 @@ type Compiler struct {
 	compiledSentenceTmpl       *template.Template
 	compiledMatchCmdTmpl       *template.Template
 	compiledOpenExprVarCmdTmpl *template.Template
-	compiledBuildResultCmdTmpl *template.Template
 }
 
 func NewRefal5Compiler() *Compiler {
@@ -208,8 +192,8 @@ func NewRefal5Compiler() *Compiler {
 	matchCmdTmpl, _ := template.New("r5t-match-cmd").Parse(elementaryMatchCommandTmplString)
 	openExprVarLoopTmpl, _ := template.New("r5t-open-evar-loop-cmd").
 		Parse(openExprVarLoopMatchCommandTmplString)
-	buildResultCmdTmpl, _ := template.New("r5t-build-result-cmd").
-		Parse(buildResultCommandTmplString)
+	// buildResultCmdTmpl, _ := template.New("r5t-build-result-cmd").
+	// Parse(buildResultCommandTmplString)
 
 	compiler := &Compiler{
 		parser:                     parser.NewTreeSitterRefal5Parser(),
@@ -218,7 +202,6 @@ func NewRefal5Compiler() *Compiler {
 		compiledFunctionTmpl:       funcTmpl,
 		compiledMatchCmdTmpl:       matchCmdTmpl,
 		compiledOpenExprVarCmdTmpl: openExprVarLoopTmpl,
-		compiledBuildResultCmdTmpl: buildResultCmdTmpl,
 	}
 
 	return compiler
@@ -327,24 +310,8 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 		VarsArrSize:    0,
 		VarsToIdxs:     map[string][][]int{},
 		Commands:       []string{},
-		NeedLoopReturn: true,
+		NeedLoopReturn: false,
 	}
-
-	// TODO: build result
-
-	sentenceRhs := sentence.Rhs.(*ast.SentenceRhsResultNode)
-
-	buildResultCmds := []string{}
-	for _, r := range sentenceRhs.Result {
-		if vNode, ok := r.(*ast.VarResultNode); ok {
-			// TODO: copy subrope from view field
-			fmt.Println(vNode)
-		} else {
-			buildResultCmds = append(buildResultCmds, c.buildResultCmds(r)...)
-		}
-	}
-
-	compiledSentence.BuildResultCommands = buildResultCmds
 
 	// TODO: build pattern matching
 
@@ -356,6 +323,8 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 	cmds := []string{}
 	nextBorder := 2
 
+	exprVarLoops := []exprVarLoop{}
+
 	for len(patternHoles) > 0 {
 		hole := patternHoles[0]
 		patternHoles = patternHoles[1:]
@@ -363,7 +332,6 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 		borders := hole.borders
 		// containsOpenEvar := false
-		exprVarLoops := []exprVarLoop{}
 
 		for len(borders) > 0 {
 
@@ -465,11 +433,54 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check if right hole is symbol
+			// TODO: check if right hole is number
 			if numberNode, ok := patterns[len(patterns)-1].(*ast.NumberPatternNode); ok {
 				cmdArg.NodeType = NumberMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
 				cmdArg.Value = fmt.Sprintf("%d", numberNode.Value)
+
+				cmd := c.generateMatchCmd(cmdArg)
+
+				patterns = patterns[:len(patterns)-1]
+				borders = append([][]int{{left, nextBorder}}, borders...)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
+				nextBorder += 1
+				continue
+			}
+
+			// TODO: check if left hole is string
+			if strNode, ok := patterns[0].(*ast.StringPatternNode); ok {
+				cmdArg.NodeType = StringMatchCmdNodeType
+				cmdArg.Side = LeftMatchCmdType
+				cmdArg.Value = fmt.Sprintf("%s", strNode.Value)
+				cmd := c.generateMatchCmd(cmdArg)
+
+				patterns = patterns[1:]
+				borders = append([][]int{{nextBorder, right}}, borders...)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
+				nextBorder += 1
+				continue
+			}
+
+			// TODO: check if right hole is string
+			if strNode, ok := patterns[len(patterns)-1].(*ast.StringPatternNode); ok {
+				cmdArg.NodeType = StringMatchCmdNodeType
+				cmdArg.Side = RightMatchCmdType
+				cmdArg.Value = fmt.Sprintf("%s", strNode.Value)
 
 				cmd := c.generateMatchCmd(cmdArg)
 
@@ -694,7 +705,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 						NodeType:    CloseExprVarMatchCmdNodeType,
 					}
 
-					compiledSentence.VarsToIdxs[ident] = append(varIdxs, []int{nextBorder, nextBorder + 1})
+					compiledSentence.VarsToIdxs[ident] = append(varIdxs, []int{nextBorder})
 					cmd := c.generateMatchCmd(cmdArg)
 					if len(exprVarLoops) > 0 {
 						exprVarLoops[len(exprVarLoops)-1].Cmds = append(
@@ -708,7 +719,8 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					continue
 				} else {
 					// TODO: Open evar
-					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder, nextBorder + 1}}
+					compiledSentence.NeedLoopReturn = true
+					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder}}
 					exprVarLoops = append(exprVarLoops, exprVarLoop{
 						Idx:   nextBorder,
 						Left:  left,
@@ -724,44 +736,61 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 			panic("Uknown pattern")
 		}
 
-		prevLoopCmd := ""
-		for i := len(exprVarLoops) - 1; i >= 0; i -= 1 {
-			buff := bytes.Buffer{}
-			loop := exprVarLoops[i]
-
-			if prevLoopCmd != "" {
-				loop.Cmds = append(loop.Cmds, prevLoopCmd)
-			}
-
-			tmplArg := ExprVarLoopCmdArg{
-				Idx:             loop.Idx,
-				Left:            loop.Left,
-				Right:           loop.Right,
-				Cmds:            loop.Cmds,
-				NeedReturn:      i == (len(exprVarLoops) - 1),
-				BuildResultCmds: compiledSentence.BuildResultCommands,
-			}
-
-			c.compiledOpenExprVarCmdTmpl.Execute(&buff, tmplArg)
-
-			prevLoopCmd = buff.String()
-		}
-
-		if prevLoopCmd != "" {
-			compiledSentence.NeedLoopReturn = false
-		}
-
-		cmds = append(cmds, prevLoopCmd)
 	}
 
-	// buff := bytes.NewBuffer([]byte{})
+	// TODO: build result
 
-	// c.compiledBuildResultCmdTmpl.Execute(buff, BuildResultCmdArg{
-	// Cmds: buildResultCmds,
-	// })
+	sentenceRhs := sentence.Rhs.(*ast.SentenceRhsResultNode)
 
-	// cmds = append(cmds, buff.String())
-	// TODO: update offsets and insert builded result rope
+	buildResultCmds := []string{}
+	for _, r := range sentenceRhs.Result {
+		if vNode, ok := r.(*ast.VarResultNode); ok {
+			// TODO: copy subrope from view field
+			if vNode.Type == ast.SymbolVarType {
+				idxs := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
+				buildResultCmds = append(
+					buildResultCmds,
+					fmt.Sprintf("runtime.CopySymbolVar(%d, arg, result)", idxs[0][0]),
+				)
+			} else {
+				idxs := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
+				buildResultCmds = append(
+					buildResultCmds,
+					fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
+				)
+			}
+		} else {
+			tmp := c.buildResultCmds(r)
+			buildResultCmds = append(buildResultCmds, tmp...)
+		}
+	}
+
+	compiledSentence.BuildResultCmds = buildResultCmds
+	prevLoopCmd := ""
+
+	for i := len(exprVarLoops) - 1; i >= 0; i -= 1 {
+		buff := bytes.Buffer{}
+		loop := exprVarLoops[i]
+
+		if prevLoopCmd != "" {
+			loop.Cmds = append(loop.Cmds, prevLoopCmd)
+		}
+
+		tmplArg := ExprVarLoopCmdArg{
+			Idx:             loop.Idx,
+			Left:            loop.Left,
+			Right:           loop.Right,
+			Cmds:            loop.Cmds,
+			NeedReturn:      i == (len(exprVarLoops) - 1),
+			BuildResultCmds: compiledSentence.BuildResultCmds,
+		}
+
+		c.compiledOpenExprVarCmdTmpl.Execute(&buff, tmplArg)
+
+		prevLoopCmd = buff.String()
+	}
+
+	cmds = append(cmds, prevLoopCmd)
 
 	compiledSentence.VarsArrSize = nextBorder
 	compiledSentence.Commands = cmds
@@ -780,31 +809,45 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode) []string {
 	case ast.FunctionCallResultType:
 		fNode := node.(*ast.FunctionCallResultNode)
 		callOffset := 2
-		fCmds := []string{}
+		fCmds := []string{
+			"runtime.BuildRopeViewFieldNode(result, viewFieldRhs)\n",
+			"result = runtime.NewRope([]runtime.R5Node{})\n",
+		}
 		for _, arg := range fNode.Args {
 			callOffset += ast.GetResultLengthInRuntimeNodes(arg)
 			fCmds = append(fCmds, c.buildResultCmds(arg)...)
 		}
 
-		fCmds = append(fCmds, fmt.Sprintf(
-			"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeCloseCall{OpenOffset: %d}})\n",
-			callOffset))
-
-		fCmds = append([]string{
+		fCmds = append(
+			fCmds,
 			fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeOpenCall{CloseOffset: %d}})\n",
-				callOffset,
-			),
-
-			fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{Function: &runtime.R5Function{Name: %s, Entry: %t, Ptr: r5t%s }}})",
-				fNode.Ident,
-				false,
+				"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Ptr: r5t%s_}, viewFieldRhs)\n",
 				fNode.Ident,
 			),
-		}, fCmds...)
+			"runtime.BuildRopeViewFieldNode(result, viewFieldRhs)\n",
+			"runtime.BuildCloseCallViewFieldNode(viewFieldRhs)\n",
+			"result = runtime.NewRope([]runtime.R5Node{})\n",
+		)
 
 		return fCmds
+	case ast.StringResultType:
+		sNode := node.(*ast.StringResultNode)
+
+		return []string{
+			fmt.Sprintf(
+				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: %s}})",
+				sNode.Value,
+			),
+		}
+	case ast.WordResultType:
+		wNode := node.(*ast.WordResultNode)
+
+		return []string{
+			fmt.Sprintf(
+				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{Name: %s}})",
+				wNode.Value,
+			),
+		}
 	case ast.NumberResultType:
 		nNode := node.(*ast.NumberResultNode)
 

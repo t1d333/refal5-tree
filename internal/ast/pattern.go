@@ -11,10 +11,10 @@ const (
 	StringPatternType
 )
 
-type VaribaleType int
+type VariableType int
 
 const (
-	SymbolVarType VaribaleType = iota
+	SymbolVarType VariableType = iota
 	TermVarType
 	ExprVarType
 )
@@ -56,7 +56,7 @@ func (*StringPatternNode) GetPatternType() PatternType {
 }
 
 type VarPatternNode struct {
-	Type VaribaleType
+	Type VariableType
 	Name string
 }
 

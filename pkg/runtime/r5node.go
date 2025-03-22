@@ -7,6 +7,7 @@ const (
 	R5DatatagChar
 	R5DatatagFunction
 	R5DatatagNumber
+	R5DatatagString
 	R5DatatagOpenBracket
 	R5DatatagCloseBracket
 	R5DatatagOpenCall
@@ -39,6 +40,14 @@ type R5NodeNumber struct {
 
 func (n *R5NodeNumber) Type() R5Datatag {
 	return R5DatatagNumber
+}
+
+type R5NodeString struct {
+	String string
+}
+
+func (n *R5NodeString) Type() R5Datatag {
+	return R5DatatagString
 }
 
 type R5NodeFunction struct {
