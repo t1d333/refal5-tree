@@ -86,7 +86,7 @@ type NumberResultNode struct {
 }
 
 func (*NumberResultNode) GetResultType() ResultType {
-	return FunctionCallResultType
+	return NumberResultType
 }
 
 type VarResultNode struct {

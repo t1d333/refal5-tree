@@ -7,6 +7,8 @@ type ViewFieldNodeType int
 const (
 	OpenCallType ViewFieldNodeType = iota
 	CloseCallType
+	OpenBracketType
+	CloseBracketType
 	RopeType
 )
 
@@ -22,6 +24,20 @@ type CloseCallViewFieldNode struct{}
 
 func (*CloseCallViewFieldNode) Type() ViewFieldNodeType {
 	return CloseCallType
+}
+
+type OpenBracketViewFieldNode struct {
+	Function R5Function
+}
+
+func (*OpenBracketViewFieldNode) Type() ViewFieldNodeType {
+	return OpenBracketType
+}
+
+type CloseBracketViewFieldNode struct{}
+
+func (*CloseBracketViewFieldNode) Type() ViewFieldNodeType {
+	return CloseBracketType
 }
 
 type RopeViewFieldNode struct {
@@ -43,7 +59,11 @@ func PrintViewField(viewField []ViewFieldNode) {
 			openCall := n.(*OpenCallViewFieldNode)
 			fmt.Printf("< %s", openCall.Function.Name)
 		case CloseCallType:
-			fmt.Printf("> ")
+			fmt.Print("> ")
+		case OpenBracketType:
+			fmt.Print("( ")
+		case CloseBracketType:
+			fmt.Print(") ")
 		case RopeType:
 			rope := n.(*RopeViewFieldNode)
 			fmt.Printf(rope.Value.String())

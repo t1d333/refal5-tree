@@ -240,37 +240,37 @@ func (r *Rope) Delete(i int) {
 }
 
 func (viewField *Rope) String() string {
-	result := fmt.Sprint("Rope{")
+	result := ""
 	for i := 0; i < viewField.Len(); i++ {
 		node := viewField.Get(i)
 		switch node.Type() {
 		case R5DatatagChar:
 			charNode := node.(*R5NodeChar)
-			result += fmt.Sprintf("(Char: %c), ", charNode.Char)
+			result += fmt.Sprintf("(Char: %c) ", charNode.Char)
 		case R5DatatagCloseBracket:
 			closeBrNode := node.(*R5NodeCloseBracket)
-			result += fmt.Sprintf("(CloseBracket, OpenOffset: %d), ", closeBrNode.OpenOffset)
+			result += fmt.Sprintf("(CloseBracket, OpenOffset: %d) ", closeBrNode.OpenOffset)
 		case R5DatatagCloseCall:
 			closeCallNode := node.(*R5NodeCloseCall)
-			result += fmt.Sprintf("(CloseCall, OpenOffset: %d), ", closeCallNode.OpenOffset)
+			result += fmt.Sprintf("(CloseCall, OpenOffset: %d) ", closeCallNode.OpenOffset)
 		case R5DatatagFunction:
 			funcNode := node.(*R5NodeFunction)
-			result += fmt.Sprintf("(Function: %s), ", funcNode.Function.Name)
+			result += fmt.Sprintf("(Function: %s) ", funcNode.Function.Name)
 		case R5DatatagIllegal:
-			result += fmt.Sprintf("(Illegal), ")
+			result += fmt.Sprintf("(Illegal) ")
 		case R5DatatagNumber:
 			numberNode := node.(*R5NodeNumber)
-			result += fmt.Sprintf("(Number: %d), ", numberNode.Number)
+			result += fmt.Sprintf("(Number: %d) ", numberNode.Number)
 		case R5DatatagString:
 			strNode := node.(*R5NodeString)
-			result += fmt.Sprintf("(String: %s), ", strNode.String)
+			result += fmt.Sprintf("(String: %s) ", strNode.String)
 		case R5DatatagOpenBracket:
 			openBrNode := node.(*R5NodeOpenBracket)
-			result += fmt.Sprintf("(OpenBracket, CloseOffset: %d), ", openBrNode.CloseOffset)
+			result += fmt.Sprintf("(OpenBracket: CloseOffset: %d) ", openBrNode.CloseOffset)
 		case R5DatatagOpenCall:
 			openCallNode := node.(*R5NodeOpenCall)
-			result += fmt.Sprintf("(OpenCall, CloseOffset: %d), ", openCallNode.CloseOffset)
+			result += fmt.Sprintf("(OpenCall: CloseOffset: %d) ", openCallNode.CloseOffset)
 		}
 	}
-	return result + "}"
+	return result
 }

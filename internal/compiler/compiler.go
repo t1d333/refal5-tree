@@ -65,12 +65,14 @@ func r5t{{.Name}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFie
 {{- end}}
 		{{ if not .NeedLoopReturn }}
 			result := runtime.NewRope([]runtime.R5Node{}) 
+			localViewField := &[]runtime.ViewFieldNode{}
 			{{ range $cmd := .BuildResultCmds }}
 				{{ $cmd }}
 			{{ end }}
 			if result.Len() > 0 {
-				runtime.BuildRopeViewFieldNode(result, viewFieldRhs)
+				runtime.BuildRopeViewFieldNode(result, localViewField)
 			}
+			*viewFieldRhs  = append(*localViewField, *viewFieldRhs...)
 			return
 		{{ end }}
   }`
@@ -100,13 +102,16 @@ for end := true; end; end = runtime.R5tOpenEvarAdvance({{ .Idx }}, p[{{ .Right }
 	{{ end }}	
 	{{ if .NeedReturn }}
 		result := runtime.NewRope([]runtime.R5Node{}) 
+		localViewField := &[]runtime.ViewFieldNode{}
 		{{ range $cmd := .BuildResultCmds }}
 			{{ $cmd }}
 		{{ end }}
 		
 		if result.Len() > 0 {
-			runtime.BuildRopeViewFieldNode(result, viewFieldRhs)
+			runtime.BuildRopeViewFieldNode(result, localViewField)
 		}
+		
+		*viewFieldRhs  = append(*localViewField, *viewFieldRhs...)
 		return
 	{{ end }}
 }`
@@ -331,7 +336,6 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 		patterns := hole.patterns
 
 		borders := hole.borders
-		// containsOpenEvar := false
 
 		for len(borders) > 0 {
 
@@ -744,25 +748,8 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 	buildResultCmds := []string{}
 	for _, r := range sentenceRhs.Result {
-		if vNode, ok := r.(*ast.VarResultNode); ok {
-			// TODO: copy subrope from view field
-			if vNode.Type == ast.SymbolVarType {
-				idxs := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
-				buildResultCmds = append(
-					buildResultCmds,
-					fmt.Sprintf("runtime.CopySymbolVar(%d, arg, result)", idxs[0][0]),
-				)
-			} else {
-				idxs := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
-				buildResultCmds = append(
-					buildResultCmds,
-					fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
-				)
-			}
-		} else {
-			tmp := c.buildResultCmds(r)
-			buildResultCmds = append(buildResultCmds, tmp...)
-		}
+		tmp := c.buildResultCmds(r, compiledSentence.VarsToIdxs)
+		buildResultCmds = append(buildResultCmds, tmp...)
 	}
 
 	compiledSentence.BuildResultCmds = buildResultCmds
@@ -797,7 +784,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 	return compiledSentence
 }
 
-func (c *Compiler) buildResultCmds(node ast.ResultNode) []string {
+func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][][]int) []string {
 	switch node.GetResultType() {
 	case ast.CharactersResultType:
 		cNode := node.(*ast.CharactersResultNode)
@@ -810,22 +797,23 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode) []string {
 		fNode := node.(*ast.FunctionCallResultNode)
 		callOffset := 2
 		fCmds := []string{
-			"runtime.BuildRopeViewFieldNode(result, viewFieldRhs)\n",
+			"runtime.BuildRopeViewFieldNode(result, localViewField)\n",
 			"result = runtime.NewRope([]runtime.R5Node{})\n",
 		}
 		for _, arg := range fNode.Args {
 			callOffset += ast.GetResultLengthInRuntimeNodes(arg)
-			fCmds = append(fCmds, c.buildResultCmds(arg)...)
+			fCmds = append(fCmds, c.buildResultCmds(arg, varsToIdxs)...)
 		}
 
 		fCmds = append(
 			fCmds,
 			fmt.Sprintf(
-				"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Ptr: r5t%s_}, viewFieldRhs)\n",
+				"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Name: \"%s\", Ptr: r5t%s_}, localViewField)\n",
+				fNode.Ident,
 				fNode.Ident,
 			),
-			"runtime.BuildRopeViewFieldNode(result, viewFieldRhs)\n",
-			"runtime.BuildCloseCallViewFieldNode(viewFieldRhs)\n",
+			"runtime.BuildRopeViewFieldNode(result,localViewField)\n",
+			"runtime.BuildCloseCallViewFieldNode(localViewField)\n",
 			"result = runtime.NewRope([]runtime.R5Node{})\n",
 		)
 
@@ -857,32 +845,41 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode) []string {
 				nNode.Value,
 			),
 		}
+	case ast.VarResultType:
+		vNode := node.(*ast.VarResultNode)
+		if vNode.Type == ast.SymbolVarType {
+			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
+			return []string{fmt.Sprintf("runtime.CopySymbolVar(%d, arg, result)", idxs[0][0])}
+		} else {
+			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
+			return []string{
+				fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
+			}
+		}
 	case ast.GroupedResultType:
 		gNode := node.(*ast.GroupedResultNode)
-		bracketsOffset := 1
 		gCmds := []string{}
 
 		for _, r := range gNode.Results {
-			bracketsOffset += ast.GetResultLengthInRuntimeNodes(r)
-			gCmds = append(gCmds, c.buildResultCmds(r)...)
+			gCmds = append(gCmds, c.buildResultCmds(r, varsToIdxs)...)
 		}
 
-		gCmds = append(
-			gCmds,
-			fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeOpenBracket{CloseOffset: %d}})",
-				bracketsOffset,
-			),
+		gCmds = append(gCmds,
+			"runtime.BuildRopeViewFieldNode(result, localViewField)\n",
 		)
 
-		gCmds = append(
-			[]string{fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeOpenBracket{CloseOffset: %d}})",
-				bracketsOffset,
-			)},
-			gCmds...)
+		tmp := []string{
+			"runtime.BuildOpenBracketViewFieldNode(localViewField)\n",
+		}
 
-		return gCmds
+		tmp = append(tmp, gCmds...)
+
+		tmp = append(tmp,
+			"result = runtime.NewRope([]runtime.R5Node{})\n",
+			"runtime.BuildCloseBracketViewFieldNode(localViewField)\n",
+		)
+
+		return tmp
 	}
 	return []string{}
 }

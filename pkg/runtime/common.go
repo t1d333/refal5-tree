@@ -1,5 +1,6 @@
 package runtime
 
+
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -443,16 +444,6 @@ func R5tCloseExprVar(i, left, right int, r *Rope, idxs []int) bool {
 	return true
 }
 
-//	int r05_open_evar_advance(struct r05_node **evar, struct r05_node *right) {
-//	  struct r05_node *term[2];
-//
-//	  if (r05_tvar_left(term, evar[1], right)) {
-//	    evar[1] = term[1];
-//	    return 1;
-//	  } else {
-//	    return 0;
-//	  }
-//	}
 func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 	term := make([]int, 2)
 
@@ -474,13 +465,38 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 
 		switch curr.Type() {
 		case CloseCallType:
-			argRope := viewFieldLhs[len(viewFieldLhs)-1].(*RopeViewFieldNode).Value
-			openCall := viewFieldLhs[len(viewFieldLhs)-2].(*OpenCallViewFieldNode)
-			viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-2]
-
-			openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
+			if argNode, ok := viewFieldLhs[len(viewFieldLhs)-1].(*RopeViewFieldNode); ok {
+				argRope := argNode.Value
+				openCall := viewFieldLhs[len(viewFieldLhs)-2].(*OpenCallViewFieldNode)
+				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-2]
+				openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
+			} else {
+				argRope := NewRope([]R5Node{})
+				openCall := viewFieldLhs[len(viewFieldLhs)-1].(*OpenCallViewFieldNode)
+				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-1]
+				openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
+			}
 		case OpenCallType:
 			viewFieldLhs = append(viewFieldLhs, curr)
+		case OpenBracketType:
+			viewFieldLhs = append(viewFieldLhs, curr)
+		case CloseBracketType:
+			if inner, ok := viewFieldLhs[len(viewFieldLhs)-1].(*RopeViewFieldNode); ok {
+				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-2]
+				grouped := NewRope([]R5Node{&R5NodeOpenBracket{CloseOffset: inner.Value.Len() + 1}})
+				grouped = grouped.Concat(inner.Value)
+				grouped = grouped.Concat(
+					NewRope([]R5Node{&R5NodeCloseBracket{OpenOffset: inner.Value.Len() + 1}}),
+				)
+
+				viewFieldRhs = append(
+					[]ViewFieldNode{&RopeViewFieldNode{Value: grouped}},
+					viewFieldRhs...)
+
+			} else {
+				PrintViewField(viewFieldLhs)
+			}
+
 		case RopeType:
 			if len(viewFieldLhs) == 0 {
 				viewFieldLhs = append(viewFieldLhs, curr)
@@ -491,6 +507,7 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 			if lastLhs.Type() == RopeType {
 				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-1]
 				lhsRope := lastLhs.(*RopeViewFieldNode)
+
 				rhsRope := curr.(*RopeViewFieldNode)
 				viewFieldLhs = append(
 					viewFieldLhs,
@@ -506,20 +523,6 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 	}
 
 	PrintViewField(viewFieldLhs)
-	// for len(callStack) > 0 {
-	// 	tmp := callStack[0]
-	// 	callStack = callStack[1:]
-	// 	begin := tmp[0]
-	// 	end := tmp[1]
-	//
-	// 	functionNode := viewField.Get(begin + 1)
-	//
-	// 	if f, ok := functionNode.(*R5NodeFunction); ok {
-	// 		f.Function.Ptr(begin+1, end, viewField)
-	// 	} else {
-	// 		panic("Recognition Imposible")
-	// 	}
-	// }
 	return nil
 }
 
@@ -594,7 +597,18 @@ func BuildCloseCallViewFieldNode(viewField *[]ViewFieldNode) {
 	*viewField = append(*viewField, &CloseCallViewFieldNode{})
 }
 
+func BuildOpenBracketViewFieldNode(viewField *[]ViewFieldNode) {
+	*viewField = append(*viewField, &OpenBracketViewFieldNode{})
+}
+
+func BuildCloseBracketViewFieldNode(viewField *[]ViewFieldNode) {
+	*viewField = append(*viewField, &CloseBracketViewFieldNode{})
+}
+
 func BuildRopeViewFieldNode(r *Rope, viewField *[]ViewFieldNode) {
+	if r.Len() == 0 {
+		return
+	}
 	*viewField = append(*viewField, &RopeViewFieldNode{Value: r})
 }
 
