@@ -76,10 +76,54 @@ func (v *VarPatternNode) GetVarTypeStr() string {
 	return ""
 }
 
+func (v *VarPatternNode) ToResultNode() ResultNode {
+	return &VarResultNode{
+		Type: v.Type,
+		Name: v.Name,
+	}
+}
+
 type GroupedPatternNode struct {
 	Patterns []PatternNode
 }
 
 func (*GroupedPatternNode) GetPatternType() PatternType {
 	return GroupedPatternType
+}
+
+func PatternToResult(node PatternNode) ResultNode {
+	switch node.GetPatternType() {
+	case CharactersPatternType:
+		node := node.(*CharactersPatternNode)
+		return &CharactersResultNode{
+			Value: node.Value,
+		}
+	case GroupedPatternType:
+		node := node.(*GroupedPatternNode)
+		result := &GroupedResultNode{}
+		for _, n := range node.Patterns {
+			result.Results = append(result.Results, PatternToResult(n))
+		}
+		return result
+	case NumberPatternType:
+		node := node.(*NumberPatternNode)
+		return &NumberResultNode{
+			Value: node.Value,
+		}
+	case StringPatternType:
+		node := node.(*NumberPatternNode)
+		return &NumberResultNode{
+			Value: node.Value,
+		}
+	case VarPatternType:
+		node := node.(*VarPatternNode)
+		return node.ToResultNode()
+	case WordPatternType:
+		node := node.(*WordPatternNode)
+		return &WordResultNode{
+			Value: node.Value,
+		}
+	}
+
+	return nil
 }

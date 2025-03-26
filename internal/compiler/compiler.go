@@ -249,10 +249,16 @@ func (c *Compiler) Generate(trees []*ast.AST) (string, error) {
 	// Templates
 	functions := []CompiledFunction{}
 
-	for _, tree := range trees {
-		for _, function := range tree.Functions {
+	i := 0
+	for i < len(trees) {
+		tree := trees[i]
+		i += 1
+		j := 0
+		for j < len(tree.Functions) {
+			function := tree.Functions[j]
+			j += 1
 
-			generatedBody, err := c.GenerateFunctionBodyCode(function)
+			generatedBody, err := c.GenerateFunctionBodyCode(tree, function)
 			if err != nil {
 				return "", fmt.Errorf(
 					"failed to generate code for function %s: %w",
@@ -268,10 +274,6 @@ func (c *Compiler) Generate(trees []*ast.AST) (string, error) {
 			}
 
 			functions = append(functions, compiled)
-			// compiledFuncTmpl.Execute(&buff, function)
-			// for _, sentence := range function.Body {
-			// }
-
 		}
 
 		c.compiledProgramTmpl.Execute(os.Stdout,
@@ -285,12 +287,19 @@ func (c *Compiler) Generate(trees []*ast.AST) (string, error) {
 	return "", nil
 }
 
-func (c *Compiler) GenerateFunctionBodyCode(f *ast.FunctionNode) ([]CompiledSentence, error) {
+func (c *Compiler) GenerateFunctionBodyCode(
+	t *ast.AST,
+	f *ast.FunctionNode,
+) ([]CompiledSentence, error) {
 	body := []CompiledSentence{}
+	fmt.Println("Compile func: ", f.Name)
 
-	for _, sentence := range f.Body {
-		// body = append(body, CompiledSentence{Value: fmt.Sprintf("  //Sentence #%d", i)})
-		compiledSentence := c.GenerateSentence(sentence)
+	i := 0
+	for i < len(f.Body) {
+		fmt.Println(len(f.Body))
+		sentence := f.Body[i]
+		compiledSentence := c.GenerateSentence(t, f, sentence, i)
+		i += 1
 
 		body = append(body, compiledSentence)
 	}
@@ -310,7 +319,13 @@ type exprVarLoop struct {
 	Cmds  []string
 }
 
-func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence {
+func (c *Compiler) GenerateSentence(
+	tree *ast.AST,
+	f *ast.FunctionNode,
+	sentence *ast.SentenceNode,
+	sentenceIdx int,
+) CompiledSentence {
+	fmt.Println("sent", sentence.Lhs)
 	compiledSentence := CompiledSentence{
 		VarsArrSize:    0,
 		VarsToIdxs:     map[string][][]int{},
@@ -329,6 +344,8 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 	nextBorder := 2
 
 	exprVarLoops := []exprVarLoop{}
+	openEvars := []*ast.VarPatternNode{}
+	allVars := []ast.PatternNode{}
 
 	for len(patternHoles) > 0 {
 		hole := patternHoles[0]
@@ -364,7 +381,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				break
 			}
 
-			// TODO: check if left hole is symbol
+			// check if left hole is symbol
 			if charNode, ok := patterns[0].(*ast.CharactersPatternNode); ok {
 				cmdArg.NodeType = CharMatchCmdNodeType
 				cmdArg.Side = LeftMatchCmdType
@@ -390,7 +407,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check if right hole is symbol
+			// check if right hole is symbol
 			if charNode, ok := patterns[len(patterns)-1].(*ast.CharactersPatternNode); ok {
 				cmdArg.NodeType = CharMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
@@ -416,7 +433,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check if left hole is number
+			// check if left hole is number
 			if numberNode, ok := patterns[0].(*ast.NumberPatternNode); ok {
 				cmdArg.NodeType = NumberMatchCmdNodeType
 				cmdArg.Side = LeftMatchCmdType
@@ -437,7 +454,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check if right hole is number
+			// check if right hole is number
 			if numberNode, ok := patterns[len(patterns)-1].(*ast.NumberPatternNode); ok {
 				cmdArg.NodeType = NumberMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
@@ -459,7 +476,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check if left hole is string
+			// check if left hole is string
 			if strNode, ok := patterns[0].(*ast.StringPatternNode); ok {
 				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = LeftMatchCmdType
@@ -480,7 +497,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check if right hole is string
+			// check if right hole is string
 			if strNode, ok := patterns[len(patterns)-1].(*ast.StringPatternNode); ok {
 				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
@@ -550,11 +567,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 				continue
 			}
 
-			// TODO: check var left
-
 			var varNode *ast.VarPatternNode
-
-			// check left
 
 			leftVarNode := patterns[0].(*ast.VarPatternNode)
 			rightVarNode := patterns[len(patterns)-1].(*ast.VarPatternNode)
@@ -589,6 +602,8 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 
 			if varNode != nil &&
 				(varNode.Type == ast.SymbolVarType || varNode.Type == ast.TermVarType) {
+
+				allVars = append(allVars, varNode)
 
 				ident := fmt.Sprintf("%s.%s", varNode.GetVarTypeStr(), varNode.Name)
 				// check repeated var
@@ -723,6 +738,7 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 					continue
 				} else {
 					// TODO: Open evar
+					openEvars = append(openEvars, varNode)
 					compiledSentence.NeedLoopReturn = true
 					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder}}
 					exprVarLoops = append(exprVarLoops, exprVarLoop{
@@ -741,6 +757,13 @@ func (c *Compiler) GenerateSentence(sentence *ast.SentenceNode) CompiledSentence
 		}
 
 	}
+
+	// TODO: get open evar list and build help functions for conditions
+	// for _, evar := range openEvars {
+	// fmt.Println(evar)
+	// }
+
+	tree.BuildHelpFunctionsForSentenceConditions(f, sentenceIdx, allVars, openEvars)
 
 	// TODO: build result
 

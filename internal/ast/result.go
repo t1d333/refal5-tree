@@ -106,6 +106,14 @@ func (v *VarResultNode) GetVarTypeStr() string {
 	return ""
 }
 
+
+func (v *VarResultNode) ToPatternNode() PatternNode {
+	return &VarPatternNode{
+		Type: v.Type,
+		Name: v.Name,
+	}
+}
+
 type StringResultNode struct {
 	Value string
 }
