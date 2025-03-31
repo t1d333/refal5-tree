@@ -7,31 +7,11 @@ func InitViewField(gofunc *R5Function) []ViewFieldNode {
 			Function: *gofunc,
 		},
 		&RopeViewFieldNode{Value: NewRope([]R5Node{
-			&R5NodeOpenBracket{CloseOffset: 4},
 			&R5NodeChar{
-				Char: '8',
+				Char: '2',
 			},
-			&R5NodeChar{
-				Char: '3',
-			},
-			&R5NodeChar{
-				Char: '8',
-			},
-			&R5NodeCloseBracket{OpenOffset: 4},
-
-			&R5NodeOpenBracket{CloseOffset: 4},
-			&R5NodeChar{
-				Char: '3',
-			},
-			&R5NodeChar{
-				Char: '8',
-			},
-			&R5NodeChar{
-				Char: '3',
-			},
-			&R5NodeOpenBracket{CloseOffset: 4},
-			&R5NodeChar{
-				Char: '3',
+			&R5NodeNumber{
+				Number: 5,
 			},
 		})},
 		&CloseCallViewFieldNode{},

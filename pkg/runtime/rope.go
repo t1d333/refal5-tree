@@ -239,10 +239,10 @@ func (r *Rope) Delete(i int) {
 	r.root = tmp.root
 }
 
-func (viewField *Rope) String() string {
+func (r *Rope) String() string {
 	result := ""
-	for i := 0; i < viewField.Len(); i++ {
-		node := viewField.Get(i)
+	for i := 0; i < r.Len(); i++ {
+		node := r.Get(i)
 		switch node.Type() {
 		case R5DatatagChar:
 			charNode := node.(*R5NodeChar)

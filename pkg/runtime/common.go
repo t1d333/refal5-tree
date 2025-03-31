@@ -1,6 +1,5 @@
 package runtime
 
-
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -429,9 +428,13 @@ func equalNodes(lhs, rhs R5Node) bool {
 		rhsFunctionNode := rhs.(*R5NodeFunction)
 		return lhsFunctionNode.Function.Name == rhsFunctionNode.Function.Name
 	case R5DatatagNumber:
-		lhsNumberNode := lhs.(*R5NodeChar)
-		rhsNumberNode := rhs.(*R5NodeChar)
-		return lhsNumberNode.Char == rhsNumberNode.Char
+		lhsNumberNode := lhs.(*R5NodeNumber)
+		rhsNumberNode := rhs.(*R5NodeNumber)
+		return lhsNumberNode.Number == rhsNumberNode.Number
+	case R5DatatagString:
+		lhsNumberNode := lhs.(*R5NodeString)
+		rhsNumberNode := rhs.(*R5NodeString)
+		return lhsNumberNode.String == rhsNumberNode.String
 	default:
 		// TODO: panic
 	}
@@ -460,6 +463,7 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 	viewFieldRhs := initViewField
 
 	for len(viewFieldRhs) > 0 {
+		// PrintViewField(append(viewFieldLhs, viewFieldRhs...))
 		curr := viewFieldRhs[0]
 		viewFieldRhs = viewFieldRhs[1:]
 

@@ -292,11 +292,9 @@ func (c *Compiler) GenerateFunctionBodyCode(
 	f *ast.FunctionNode,
 ) ([]CompiledSentence, error) {
 	body := []CompiledSentence{}
-	fmt.Println("Compile func: ", f.Name)
 
 	i := 0
 	for i < len(f.Body) {
-		fmt.Println(len(f.Body))
 		sentence := f.Body[i]
 		compiledSentence := c.GenerateSentence(t, f, sentence, i)
 		i += 1
@@ -325,7 +323,6 @@ func (c *Compiler) GenerateSentence(
 	sentence *ast.SentenceNode,
 	sentenceIdx int,
 ) CompiledSentence {
-	fmt.Println("sent", sentence.Lhs)
 	compiledSentence := CompiledSentence{
 		VarsArrSize:    0,
 		VarsToIdxs:     map[string][][]int{},
@@ -600,10 +597,12 @@ func (c *Compiler) GenerateSentence(
 				patterns = patterns[:len(patterns)-1]
 			}
 
+			if varNode != nil {
+				allVars = append(allVars, varNode)
+			}
+
 			if varNode != nil &&
 				(varNode.Type == ast.SymbolVarType || varNode.Type == ast.TermVarType) {
-
-				allVars = append(allVars, varNode)
 
 				ident := fmt.Sprintf("%s.%s", varNode.GetVarTypeStr(), varNode.Name)
 				// check repeated var
@@ -738,7 +737,7 @@ func (c *Compiler) GenerateSentence(
 					continue
 				} else {
 					// TODO: Open evar
-					openEvars = append(openEvars, varNode)
+					openEvars = append([]*ast.VarPatternNode{varNode}, openEvars...)
 					compiledSentence.NeedLoopReturn = true
 					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder}}
 					exprVarLoops = append(exprVarLoops, exprVarLoop{
@@ -758,16 +757,11 @@ func (c *Compiler) GenerateSentence(
 
 	}
 
-	// TODO: get open evar list and build help functions for conditions
-	// for _, evar := range openEvars {
-	// fmt.Println(evar)
-	// }
-
 	tree.BuildHelpFunctionsForSentenceConditions(f, sentenceIdx, allVars, openEvars)
 
 	// TODO: build result
 
-	sentenceRhs := sentence.Rhs.(*ast.SentenceRhsResultNode)
+	sentenceRhs := f.Body[sentenceIdx].Rhs.(*ast.SentenceRhsResultNode)
 
 	buildResultCmds := []string{}
 	for _, r := range sentenceRhs.Result {
@@ -818,14 +812,9 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 		return []string{cmd + "})\n"}
 	case ast.FunctionCallResultType:
 		fNode := node.(*ast.FunctionCallResultNode)
-		callOffset := 2
 		fCmds := []string{
 			"runtime.BuildRopeViewFieldNode(result, localViewField)\n",
 			"result = runtime.NewRope([]runtime.R5Node{})\n",
-		}
-		for _, arg := range fNode.Args {
-			callOffset += ast.GetResultLengthInRuntimeNodes(arg)
-			fCmds = append(fCmds, c.buildResultCmds(arg, varsToIdxs)...)
 		}
 
 		fCmds = append(
@@ -835,6 +824,13 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 				fNode.Ident,
 				fNode.Ident,
 			),
+		)
+
+		for _, arg := range fNode.Args {
+			fCmds = append(fCmds, c.buildResultCmds(arg, varsToIdxs)...)
+		}
+		fCmds = append(
+			fCmds,
 			"runtime.BuildRopeViewFieldNode(result,localViewField)\n",
 			"runtime.BuildCloseCallViewFieldNode(localViewField)\n",
 			"result = runtime.NewRope([]runtime.R5Node{})\n",
@@ -872,9 +868,10 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 		vNode := node.(*ast.VarResultNode)
 		if vNode.Type == ast.SymbolVarType {
 			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
-			return []string{fmt.Sprintf("runtime.CopySymbolVar(%d, arg, result)", idxs[0][0])}
+			return []string{fmt.Sprintf("runtime.CopySymbolVar(p[%d], arg, result)", idxs[0][0])}
 		} else {
 			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
+			fmt.Println("============", vNode.Name, idxs)
 			return []string{
 				fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
 			}
