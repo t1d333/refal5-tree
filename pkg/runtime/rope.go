@@ -1,6 +1,9 @@
 package runtime
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type RopeNodeType int
 
@@ -10,7 +13,8 @@ const (
 )
 
 type Rope struct {
-	root RopeNode
+	root         RopeNode
+	fibGenerator func(n int) int
 }
 
 func (r *Rope) Len() int {
@@ -21,9 +25,113 @@ func (r *Rope) Len() int {
 	return r.root.GetWeight()
 }
 
+func (r *Rope) Height() int {
+	if r.root == nil {
+		return 0
+	}
+
+	return r.root.GetHeight()
+}
+
+func (r *Rope) traverseLeaves() []*RopeNodeLeaf {
+	if r.root == nil {
+		return nil
+	}
+
+	stack := []RopeNode{r.root}
+	result := []*RopeNodeLeaf{}
+
+	for len(stack) > 0 {
+		curr := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		switch curr.NodeType() {
+		case RopeNodeLeafType:
+			leaf := curr.(*RopeNodeLeaf)
+			result = append(result, leaf)
+		case RopeNodeInnerType:
+			inner := curr.(*RopeNodeInner)
+
+			if inner.Right != nil {
+				stack = append(stack, inner.Right)
+			}
+
+			if inner.Left != nil {
+				stack = append(stack, inner.Left)
+			}
+		}
+	}
+
+	return result
+}
+
+func (r *Rope) IsBalanced() bool {
+	required := r.fibGenerator(r.root.GetHeight() + 2)
+	return r.root.GetWeight() >= required
+}
+
+func (r *Rope) findSlot(length int) int {
+	for i := 0; ; i++ {
+		if length >= r.fibGenerator(i) && length < r.fibGenerator(i+1) {
+			return i
+		}
+	}
+}
+
+func (r *Rope) Balance() *Rope {
+	leaves := r.traverseLeaves()
+	slots := map[int]*Rope{}
+
+	for _, leaf := range leaves {
+		curr := NewRope(leaf.Data)
+		for {
+			slot := r.findSlot(curr.Len())
+			if existing, ok := slots[slot]; ok && existing != nil {
+				// Если в слоте уже есть дерево, объединяем его с текущим
+				curr = existing.Concat(curr)
+				delete(slots, slot)
+			} else {
+				slots[slot] = curr
+				break
+			}
+		}
+
+	}
+
+	var result *Rope
+
+	slotsSlice := []*Rope{}
+	for _, r := range slots {
+		slotsSlice = append(slotsSlice, r)
+	}
+
+	slices.SortFunc(slotsSlice, func(lhs, rhs *Rope) int {
+		if lhs.Len() < rhs.Len() {
+			return -1
+		} else if lhs.Len() < rhs.Len() {
+			return 1
+		}
+
+		return 0
+	})
+
+	for i := 0; i < len(slotsSlice); i++ {
+		curr := slotsSlice[i]
+
+		if result == nil {
+			result = curr
+		} else {
+			result = result.Concat(curr)
+		}
+	}
+
+	return result
+}
+
 type RopeNode interface {
 	NodeType() RopeNodeType
 	GetWeight() int
+	GetHeight() int
 }
 
 type RopeNodeLeaf struct {
@@ -38,8 +146,13 @@ func (n *RopeNodeLeaf) GetWeight() int {
 	return len(n.Data)
 }
 
+func (n *RopeNodeLeaf) GetHeight() int {
+	return 0
+}
+
 type RopeNodeInner struct {
 	Weight int
+	Height int
 	Left   RopeNode
 	Right  RopeNode
 }
@@ -52,24 +165,49 @@ func (n *RopeNodeInner) GetWeight() int {
 	return n.Weight
 }
 
+func (n *RopeNodeInner) GetHeight() int {
+	return n.Height
+}
+
 func NewRope(n []R5Node) *Rope {
 	return &Rope{
+		fibGenerator: fibonacci(),
 		root: &RopeNodeLeaf{
 			Data: n,
 		},
 	}
 }
 
-func (r *Rope) Concat(other *Rope) *Rope {
-	newRoot := &RopeNodeInner{
-		Weight: r.root.GetWeight() + other.root.GetWeight(),
-		Left:   r.root,
-		Right:  other.root,
+func (r *Rope) ConcatWithRebalance(other *Rope) *Rope {
+	res := &Rope{
+		fibGenerator: r.fibGenerator,
+		root: &RopeNodeInner{
+			Weight: r.root.GetWeight() + other.root.GetWeight(),
+			Left:   r.root,
+			Right:  other.root,
+			Height: max(r.root.GetHeight(), other.root.GetHeight()) + 1,
+		},
 	}
-	newRoot.Left = r.root
-	newRoot.Right = other.root
-	res := Rope{root: newRoot}
-	return &res
+
+	if res.IsBalanced() {
+		return res
+	}
+
+	return res.Balance()
+}
+
+func (r *Rope) Concat(other *Rope) *Rope {
+	res := &Rope{
+		fibGenerator: r.fibGenerator,
+		root: &RopeNodeInner{
+			Weight: r.root.GetWeight() + other.root.GetWeight(),
+			Left:   r.root,
+			Right:  other.root,
+			Height: max(r.root.GetHeight(), other.root.GetHeight()) + 1,
+		},
+	}
+
+	return res
 }
 
 func (r *Rope) Get(i int) R5Node {
@@ -204,20 +342,20 @@ func (r *Rope) Insert(i int, data []R5Node) {
 	tmp := NewRope(data)
 
 	if i == 0 {
-		tmp = tmp.Concat(r)
+		tmp = tmp.ConcatWithRebalance(r)
 		r.root = tmp.root
 		return
 	}
 
 	if i == r.Len() {
-		tmp = r.Concat(tmp)
+		tmp = r.ConcatWithRebalance(tmp)
 		r.root = tmp.root
 		return
 	}
 
 	tmpLhs, tmpRhs := r.Split(i)
-	tmp = tmpLhs.Concat(tmp)
-	tmp = tmp.Concat(tmpRhs)
+	tmp = tmpLhs.ConcatWithRebalance(tmp)
+	tmp = tmp.ConcatWithRebalance(tmpRhs)
 	r.root = tmp.root
 }
 
@@ -235,7 +373,7 @@ func (r *Rope) Delete(i int) {
 
 	_, tmpRhs := r.Split(i + 1)
 
-	tmp := tmpLhs.Concat(tmpRhs)
+	tmp := tmpLhs.ConcatWithRebalance(tmpRhs)
 	r.root = tmp.root
 }
 

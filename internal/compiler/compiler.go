@@ -737,6 +737,7 @@ func (c *Compiler) GenerateSentence(
 					continue
 				} else {
 					// TODO: Open evar
+					// hole.pattern
 					openEvars = append([]*ast.VarPatternNode{varNode}, openEvars...)
 					compiledSentence.NeedLoopReturn = true
 					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder}}
@@ -871,7 +872,6 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 			return []string{fmt.Sprintf("runtime.CopySymbolVar(p[%d], arg, result)", idxs[0][0])}
 		} else {
 			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
-			fmt.Println("============", vNode.Name, idxs)
 			return []string{
 				fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
 			}

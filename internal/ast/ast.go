@@ -13,18 +13,29 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 	variables []PatternNode,
 	openEvarList []*VarPatternNode,
 ) {
-	fmt.Println(openEvarList)
 	sentence := f.Body[sentenceIdx]
 
-	if len(sentence.Condtitions) == 0 {
-		return
-	}
-
+	extendetVariables := []PatternNode{}
 	rhsConvertedVariables := []ResultNode{}
 
 	for _, v := range variables {
 		varNode := v.(*VarPatternNode)
-		rhsConvertedVariables = append(rhsConvertedVariables, varNode.ToResultNode())
+		if varNode.Type == ExprVarType {
+			groupedNode := &GroupedPatternNode{Patterns: []PatternNode{varNode}}
+			extendetVariables = append(
+				extendetVariables,
+				groupedNode,
+			)
+			rhsConvertedVariables = append(rhsConvertedVariables, PatternToResult(groupedNode))
+		} else {
+			extendetVariables = append(extendetVariables, varNode)
+			rhsConvertedVariables = append(rhsConvertedVariables, PatternToResult(varNode))
+		}
+
+	}
+
+	if len(sentence.Condtitions) == 0 {
+		return
 	}
 
 	firstConditon := sentence.Condtitions[0]
@@ -240,7 +251,6 @@ func (t *AST) BuildForwardFunction(
 			},
 		},
 	}
-	return nil
 }
 
 func (a *AST) BuildNextFunction(
@@ -250,15 +260,11 @@ func (a *AST) BuildNextFunction(
 	openEvars []*VarPatternNode,
 ) *FunctionNode {
 	return &FunctionNode{
-		Name: fmt.Sprintf("%sNext%d", originFunc, k),
+		Name:  fmt.Sprintf("%sNext%d", originFunc, k),
 		Entry: false,
 		Body: []*SentenceNode{
-			{
-				
-			},
-			{
-				
-			},
+			{},
+			{},
 		},
 	}
 }
