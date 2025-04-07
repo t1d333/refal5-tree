@@ -106,7 +106,6 @@ func (v *VarResultNode) GetVarTypeStr() string {
 	return ""
 }
 
-
 func (v *VarResultNode) ToPatternNode() PatternNode {
 	return &VarPatternNode{
 		Type: v.Type,
@@ -132,4 +131,31 @@ type GroupedResultNode struct {
 
 func (*GroupedResultNode) GetResultType() ResultType {
 	return GroupedResultType
+}
+
+func ReplaceResultVariable(
+	results []ResultNode,
+	target *VarResultNode,
+	replacement []ResultNode,
+) []ResultNode {
+	result := []ResultNode{}
+
+	for _, curr := range results {
+		if curr.GetResultType() == VarResultType {
+			varNode := curr.(*VarResultNode)
+			if varNode.Name != target.Name || varNode.Type != target.Type {
+				result = append(result, curr)
+			} else {
+				result = append(result, replacement...)
+			}
+
+		} else if curr.GetResultType() == GroupedResultType {
+			grouped := curr.(*GroupedResultNode)
+			result = append(result, ReplaceResultVariable(grouped.Results, target, replacement)...)
+		} else {
+			result = append(result, curr)
+		}
+	}
+
+	return result
 }

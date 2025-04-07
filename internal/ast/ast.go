@@ -2,6 +2,19 @@ package ast
 
 import "fmt"
 
+type ConditionHelpTemplateType int
+
+const (
+	T0TemplateType ConditionHelpTemplateType = iota
+	T1TemplateType
+	T2TemplateType
+	T3TemplateType
+	T4TemplateType
+	T5TemplateType
+	T6TemplateType
+	T7TemplateType
+)
+
 type AST struct {
 	Functions            []*FunctionNode
 	ExternalDeclarations []string
@@ -113,16 +126,9 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 
 		for i := range openEvarList {
 			// build i forward func
-			forwardFunc := &FunctionNode{
-				Name:  fmt.Sprintf("%sForward%d", f.Name, i),
-				Entry: false,
-			}
-
+			forwardFunc := t.BuildForwardFunction(i, f, sentence, openEvarList)
 			// build i next func
-			nextFunc := &FunctionNode{
-				Name:  fmt.Sprintf("%sNext%d", f.Name, i),
-				Entry: false,
-			}
+			nextFunc := t.BuildNextFunction(i, f, sentence, firstConditon, openEvarList)
 
 			t.Functions = append(t.Functions, forwardFunc)
 			t.Functions = append(t.Functions, nextFunc)
@@ -227,24 +233,50 @@ func (t *AST) BuildForwardFunction(
 		Body: []*SentenceNode{
 			//  T1(Pat, K) = <F_next_K T2(Pat, K)>;
 			{
-				Lhs: t.BuildTemplateT1(k, originSentence.Lhs, openEvars),
+				Lhs: t.BuildConditionTemplate(
+					k,
+					T1TemplateType,
+					originSentence.Lhs,
+					openEvars,
+					map[string]interface{}{},
+				),
 				Rhs: &SentenceRhsResultNode{
 					Result: []ResultNode{
 						&FunctionCallResultNode{
 							Ident: fmt.Sprintf("%sNext%d", originFunc.Name, k),
-							Args:  t.BuildTemplateT2(k, originSentence.Lhs, openEvars),
+							Args: PatternsToResults(t.BuildConditionTemplate(
+								k,
+								T2TemplateType,
+								originSentence.Lhs,
+								openEvars,
+								map[string]interface{}{},
+							)),
 						},
 					},
 				},
 			},
 			// T3(Pat, K) = <F_forward_K+1 T4(Pat, K)>;
 			{
-				Lhs: t.BuildTemplateT3(k, originSentence.Lhs, openEvars),
+				Lhs: t.BuildConditionTemplate(
+					k,
+					T3TemplateType,
+					originSentence.Lhs,
+					openEvars,
+					map[string]interface{}{},
+				),
 				Rhs: &SentenceRhsResultNode{
 					Result: []ResultNode{
 						&FunctionCallResultNode{
 							Ident: fmt.Sprintf("%sNext%d", originFunc.Name, k+1),
-							Args:  t.BuildTemplateT4(k, originSentence.Lhs, openEvars),
+							Args: PatternsToResults(
+								t.BuildConditionTemplate(
+									k,
+									T4TemplateType,
+									originSentence.Lhs,
+									openEvars,
+									map[string]interface{}{},
+								),
+							),
 						},
 					},
 				},
@@ -257,89 +289,331 @@ func (a *AST) BuildNextFunction(
 	k int,
 	originFunc *FunctionNode,
 	originSentence *SentenceNode,
+	condition *ConditionNode,
 	openEvars []*VarPatternNode,
 ) *FunctionNode {
+	targetVariable := openEvars[k]
+	// vars(Pat) | e.K → e.K_fix e.K_var
+	replacementPatternVariables := []PatternNode{
+		&VarPatternNode{
+			Type: ExprVarType,
+			Name: fmt.Sprintf("%sFix", targetVariable.Name),
+		},
+		&VarPatternNode{
+			Type: ExprVarType,
+			Name: fmt.Sprintf("%sVar", targetVariable.Name),
+		},
+	}
+
+	lhsVariables := ExtractVars(originSentence.Lhs)
+
+	for i, n := range lhsVariables {
+		varNode := n.(*VarPatternNode)
+		if varNode.Type == ExprVarType {
+			lhsVariables[i] = &GroupedPatternNode{
+				Patterns: []PatternNode{
+					n,
+				},
+			}
+		}
+	}
+
+	replacedPatternVariables := ReplacePatternVariable(
+		lhsVariables,
+		targetVariable,
+		replacementPatternVariables,
+	)
+
 	return &FunctionNode{
 		Name:  fmt.Sprintf("%sNext%d", originFunc, k),
 		Entry: false,
 		Body: []*SentenceNode{
-			{},
-			{},
+			// T5(Pat, K)
+			// = <F_check
+			// vars(Pat) | e.K → e.K_fix e.K_var
+			// ResC | e.K → e.K_fix e.K_var
+			// >;
+
+			{
+				Lhs: a.BuildConditionTemplate(
+					k,
+					T5TemplateType,
+					originSentence.Lhs,
+					openEvars,
+					map[string]interface{}{},
+				),
+				Rhs: &SentenceRhsResultNode{
+					Result: []ResultNode{
+						&FunctionCallResultNode{
+							Ident: fmt.Sprintf("%sCheck", originFunc.Name),
+							Args: append(
+								PatternsToResults(replacedPatternVariables),
+								ReplaceResultVariable(
+									condition.Result,
+									PatternToResult(targetVariable).(*VarResultNode),
+									PatternsToResults(replacementPatternVariables),
+								)...),
+						},
+					},
+				},
+			},
+
+			// T6(Pat, K) = <F_forward_K+1 T7(Pat, K)>;
+			{
+				Lhs: a.BuildConditionTemplate(
+					k,
+					T6TemplateType,
+					originSentence.Lhs,
+					openEvars,
+					map[string]interface{}{},
+				),
+				Rhs: &SentenceRhsResultNode{
+					Result: []ResultNode{
+						&FunctionCallResultNode{
+							Ident: fmt.Sprintf("%sForward%d", originFunc.Name, k+1),
+							Args: PatternsToResults(a.BuildConditionTemplate(
+								k,
+								T7TemplateType,
+								originSentence.Lhs,
+								openEvars,
+								map[string]interface{}{},
+							)),
+						},
+					},
+				},
+			},
 		},
 	}
 }
 
-func (a *AST) BuildTemplateT1(
-	k int,
+func (a *AST) BuildConditionTemplate(
+	target int,
+	templateType ConditionHelpTemplateType,
 	patterns []PatternNode,
 	openEvars []*VarPatternNode,
+	varsSeen map[string]interface{},
 ) []PatternNode {
-	result := []PatternNode{}
-	// queue := patterns
+	resultLhs := []PatternNode{}
+	resultRhs := []PatternNode{}
+	queue := patterns
 
-	return result
-}
+	for len(queue) > 0 {
+		result := &[]PatternNode{}
+		var curr PatternNode = nil
+		currStart := queue[0]
+		currEnd := queue[len(queue)-1]
 
-func (a *AST) BuildTemplateT2(
-	k int,
-	patterns []PatternNode,
-	openEvars []*VarPatternNode,
-) []ResultNode {
-	result := []ResultNode{}
-	// queue := patterns
+		if currStart.GetPatternType() != VarPatternType {
+			curr = currStart
+			queue = queue[1:]
+			result = &resultLhs
+		} else {
+			varNode := currStart.(*VarPatternNode)
+			// TODO: check if not expr var
+			if varNode.Type != ExprVarType {
+				curr = currStart
+				queue = queue[1:]
+				result = &resultLhs
+				// TODO: check if var already seen
+			} else if _, ok := varsSeen[varNode.Name]; ok {
+				curr = currStart
+				queue = queue[1:]
+				result = &resultLhs
+			}
+		}
 
-	return result
-}
+		if curr == nil {
+			if currEnd.GetPatternType() != VarPatternType {
+				curr = currStart
+				queue = queue[:len(queue)-1]
+				result = &resultRhs
+			} else {
+				varNode := currEnd.(*VarPatternNode)
+				// TODO: check if not expr var
+				if varNode.Type != ExprVarType {
+					curr = currEnd
+					queue = queue[:len(queue)-1]
+					result = &resultRhs
+					// TODO: check if var already seen
+				} else if _, ok := varsSeen[varNode.Name]; ok {
+					curr = currEnd
+					queue = queue[:len(queue)-1]
+					result = &resultRhs
+				}
+			}
+		}
 
-func (a *AST) BuildTemplateT3(
-	k int,
-	patterns []PatternNode,
-	openEvars []*VarPatternNode,
-) []PatternNode {
-	result := []PatternNode{}
-	// queue := patterns
+		if curr == nil {
+			curr = currStart
+			result = &resultLhs
+		}
 
-	return result
-}
+		if curr.GetPatternType() == GroupedPatternType {
+			grouped := curr.(*GroupedPatternNode)
+			*result = append(
+				*result,
+				&GroupedPatternNode{
+					Patterns: a.BuildConditionTemplate(
+						target,
+						templateType,
+						grouped.Patterns,
+						openEvars,
+						varsSeen,
+					),
+				},
+			)
+			continue
+		}
 
-func (a *AST) BuildTemplateT4(
-	k int,
-	patterns []PatternNode,
-	openEvar []*VarPatternNode,
-) []ResultNode {
-	result := []ResultNode{}
-	// queue := patterns
+		if curr.GetPatternType() != VarPatternType {
+			*result = append(*result, curr)
+			continue
+		}
 
-	return result
-}
+		varNode := curr.(*VarPatternNode)
 
-func (a *AST) BuildTemplateT5(
-	patterns []PatternNode,
-	openExprVarMap map[string]bool,
-) []PatternNode {
-	result := []PatternNode{}
-	// queue := patterns
+		if varNode.Type != ExprVarType {
+			*result = append(*result, curr)
+			continue
+		}
 
-	return result
-}
+		if _, ok := varsSeen[varNode.Name]; !ok && templateType == T5TemplateType &&
+			varNode.Name == openEvars[target].Name {
+			varsSeen[varNode.Name] = struct{}{}
+			// (e.X_fix) e.X_var
+			*result = append(*result, &GroupedPatternNode{[]PatternNode{&VarPatternNode{
+				Name: fmt.Sprintf("%sFix", openEvars[target].Name),
+				Type: ExprVarType,
+			}}}, &VarPatternNode{Name: fmt.Sprintf("%sVar", openEvars[target].Name), Type: ExprVarType})
+			continue
+		} else if templateType == T5TemplateType && varNode.Name == openEvars[target].Name {
+			// e.X_fix e.X_var
+			*result = append(*result, &VarPatternNode{
+				Name: fmt.Sprintf("%sFix", openEvars[target].Name),
+				Type: ExprVarType,
+			}, &VarPatternNode{Name: fmt.Sprintf("%sVar", openEvars[target].Name), Type: ExprVarType})
+			continue
+		}
 
-func (a *AST) BuildTemplateT6(
-	patterns []PatternNode,
-	openExprVarMap map[string]bool,
-) []PatternNode {
-	result := []PatternNode{}
-	// queue := patterns
+		if varNode.Name == openEvars[target].Name {
+			if templateType == T1TemplateType {
+				// (e.X_fix) t.X_next e.X_rest
+				*result = append(*result,
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&VarPatternNode{
+								Name: fmt.Sprintf("%sFix", varNode.Name),
+								Type: ExprVarType,
+							},
+						},
+					},
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sNext", varNode.Name),
+						Type: TermVarType,
+					},
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sRest", varNode.Name),
+						Type: ExprVarType,
+					},
+				)
+				break
+			}
+			if templateType == T2TemplateType {
+				// (e.X_fix t.X_next) e.X_rest
+				*result = append(*result,
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&VarPatternNode{
+								Name: fmt.Sprintf("%sFix", varNode.Name),
+								Type: ExprVarType,
+							},
+							&VarPatternNode{
+								Name: fmt.Sprintf("%sNext", varNode.Name),
+								Type: TermVarType,
+							},
+						},
+					},
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sRest", varNode.Name),
+						Type: ExprVarType,
+					},
+				)
+				break
+			}
+			if templateType == T3TemplateType {
+				// (e.X_fix)
+				*result = append(*result,
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&VarPatternNode{
+								Name: fmt.Sprintf("%sFix", varNode.Name),
+								Type: ExprVarType,
+							},
+						},
+					},
+				)
+				break
+			}
+			if templateType == T4TemplateType {
+				// e.X_fix
+				*result = append(*result,
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sFix", varNode.Name),
+						Type: ExprVarType,
+					},
+				)
+				break
+			}
+			if templateType == T6TemplateType {
+				// (e.X_fix) e.X_rest
+				*result = append(*result,
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&VarPatternNode{
+								Name: fmt.Sprintf("%sFix", varNode.Name),
+								Type: ExprVarType,
+							},
+						},
+					},
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sRest", varNode.Name),
+						Type: ExprVarType,
+					},
+				)
+				break
+			}
+			if templateType == T7TemplateType {
+				// e.X_fix e.X_rest
+				*result = append(*result,
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sFix", varNode.Name),
+						Type: ExprVarType,
+					},
+					&VarPatternNode{
+						Name: fmt.Sprintf("%sRest", varNode.Name),
+						Type: ExprVarType,
+					},
+				)
+				break
+			}
+		}
 
-	return result
-}
+		for i := 0; i < target; i++ {
+			openVar := openEvars[i]
+			if varNode.Name == openVar.Name {
+				*result = append(*result, &VarPatternNode{
+					Name: fmt.Sprintf("%sRest", varNode.Name),
+					Type: ExprVarType,
+				})
+				queue = []PatternNode{}
+				break
+			}
+		}
+	}
 
-func (a *AST) BuildTemplateT7(
-	k int,
-	patterns []PatternNode,
-	openEvar []*VarPatternNode,
-) []ResultNode {
-	result := []ResultNode{}
-	// queue := patterns
+	for i := len(resultRhs) - 1; i >= 0; i-- {
+		resultLhs = append(resultLhs, resultRhs[i])
+	}
 
-	return result
+	return resultLhs
 }

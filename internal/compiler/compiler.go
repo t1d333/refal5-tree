@@ -288,15 +288,44 @@ func (c *Compiler) Generate(trees []*ast.AST) (string, error) {
 }
 
 func (c *Compiler) GenerateFunctionBodyCode(
-	t *ast.AST,
-	f *ast.FunctionNode,
+	tree *ast.AST,
+	function *ast.FunctionNode,
 ) ([]CompiledSentence, error) {
+	fmt.Println("Generate code for function: ", function.Name, len(function.Body[0].Lhs))
 	body := []CompiledSentence{}
 
 	i := 0
-	for i < len(f.Body) {
-		sentence := f.Body[i]
-		compiledSentence := c.GenerateSentence(t, f, sentence, i)
+	for i < len(function.Body) {
+		fmt.Println("Lhs")
+		for _, n := range function.Body[i].Lhs {
+			fmt.Println(n)
+			if n.GetPatternType() == ast.GroupedPatternType {
+				t := n.(*ast.GroupedPatternNode)
+				fmt.Println("(")
+				for _, k := range t.Patterns {
+					fmt.Println(k)
+				}
+				fmt.Println(")")
+			}
+		}
+
+		rhs := function.Body[i].Rhs.(*ast.SentenceRhsResultNode)
+
+		fmt.Println("Rhs")
+		for _, n := range rhs.Result {
+			fmt.Println(n)
+			if n.GetResultType() == ast.GroupedResultType {
+				t := n.(*ast.GroupedResultNode)
+				fmt.Println("(")
+				for _, k := range t.Results {
+					fmt.Println(k)
+				}
+				fmt.Println(")")
+			}
+		}
+		fmt.Println()
+
+		compiledSentence := c.GenerateSentence(tree, function, function.Body[i], i)
 		i += 1
 
 		body = append(body, compiledSentence)

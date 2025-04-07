@@ -124,6 +124,58 @@ func PatternToResult(node PatternNode) ResultNode {
 			Value: node.Value,
 		}
 	}
-
 	return nil
+}
+
+func PatternsToResults(patterns []PatternNode) []ResultNode {
+	result := []ResultNode{}
+
+	for _, n := range patterns {
+		result = append(result, PatternToResult(n))
+	}
+	return result
+}
+
+func ExtractVars(patterns []PatternNode) []PatternNode {
+	result := []PatternNode{}
+
+	for _, n := range patterns {
+		if n.GetPatternType() == VarPatternType {
+			result = append(result, n)
+		}
+
+		if n.GetPatternType() == GroupedPatternType {
+			grouped := n.(*GroupedPatternNode)
+			result = append(result, ExtractVars(grouped.Patterns)...)
+		}
+	}
+
+	return result
+}
+
+func ReplacePatternVariable(
+	patterns []PatternNode,
+	target *VarPatternNode,
+	replacement []PatternNode,
+) []PatternNode {
+	result := []PatternNode{}
+
+	for _, curr := range patterns {
+		if curr.GetPatternType() == VarPatternType {
+			varNode := curr.(*VarPatternNode)
+			if varNode.Name != target.Name || varNode.Type != target.Type {
+				result = append(result, curr)
+			} else {
+				result = append(result, replacement...)
+			}
+
+		} else if curr.GetPatternType() == GroupedPatternType {
+			grouped := curr.(*GroupedPatternNode)
+			result = append(result, ReplacePatternVariable(grouped.Patterns, target, replacement)...)
+		} else {
+			result = append(result, curr)
+		}
+	}
+
+	return result
 }
