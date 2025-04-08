@@ -1,5 +1,7 @@
 package ast
 
+import "fmt"
+
 type PatternType int
 
 const (
@@ -171,11 +173,35 @@ func ReplacePatternVariable(
 
 		} else if curr.GetPatternType() == GroupedPatternType {
 			grouped := curr.(*GroupedPatternNode)
-			result = append(result, ReplacePatternVariable(grouped.Patterns, target, replacement)...)
+			result = append(result, &GroupedPatternNode{Patterns: ReplacePatternVariable(grouped.Patterns, target, replacement)})
 		} else {
 			result = append(result, curr)
 		}
 	}
 
 	return result
+}
+
+func PrintPattern(pattern PatternNode) {
+	switch pattern.GetPatternType() {
+	case NumberPatternType:
+		n := pattern.(*NumberPatternNode)
+		fmt.Printf("(Number: %d)\n", n.Value)
+	case StringPatternType:
+		n := pattern.(*StringPatternNode)
+		fmt.Printf("(Number: %d)\n", n.Value)
+	case CharactersPatternType:
+		n := pattern.(*CharactersPatternNode)
+		fmt.Printf("(Number: %s)\n", string(n.Value))
+	case VarPatternType:
+		n := pattern.(*VarPatternNode)
+		fmt.Printf("(Var %s %s)\n", n.GetVarTypeStr(), n.Name)
+	case GroupedPatternType:
+		n := pattern.(*GroupedPatternNode)
+		fmt.Printf("(\n")
+		for _, g := range n.Patterns {
+			PrintPattern(g)
+		}
+		fmt.Printf(")\n")
+	}
 }

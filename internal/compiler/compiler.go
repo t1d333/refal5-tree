@@ -291,39 +291,21 @@ func (c *Compiler) GenerateFunctionBodyCode(
 	tree *ast.AST,
 	function *ast.FunctionNode,
 ) ([]CompiledSentence, error) {
-	fmt.Println("Generate code for function: ", function.Name, len(function.Body[0].Lhs))
 	body := []CompiledSentence{}
 
 	i := 0
 	for i < len(function.Body) {
-		fmt.Println("Lhs")
-		for _, n := range function.Body[i].Lhs {
-			fmt.Println(n)
-			if n.GetPatternType() == ast.GroupedPatternType {
-				t := n.(*ast.GroupedPatternNode)
-				fmt.Println("(")
-				for _, k := range t.Patterns {
-					fmt.Println(k)
-				}
-				fmt.Println(")")
-			}
-		}
+		// fmt.Println("Lhs")
+		// for _, n := range function.Body[i].Lhs {
+		// 	ast.PrintPattern(n)
+		// }
 
-		rhs := function.Body[i].Rhs.(*ast.SentenceRhsResultNode)
+		// rhs := function.Body[i].Rhs.(*ast.SentenceRhsResultNode)
 
-		fmt.Println("Rhs")
-		for _, n := range rhs.Result {
-			fmt.Println(n)
-			if n.GetResultType() == ast.GroupedResultType {
-				t := n.(*ast.GroupedResultNode)
-				fmt.Println("(")
-				for _, k := range t.Results {
-					fmt.Println(k)
-				}
-				fmt.Println(")")
-			}
-		}
-		fmt.Println()
+		// fmt.Println("Rhs")
+		// for _, n := range rhs.Result {
+		// 	ast.PrintResult(n)
+		// }
 
 		compiledSentence := c.GenerateSentence(tree, function, function.Body[i], i)
 		i += 1
@@ -352,6 +334,7 @@ func (c *Compiler) GenerateSentence(
 	sentence *ast.SentenceNode,
 	sentenceIdx int,
 ) CompiledSentence {
+	// fmt.Println("Generate sentence for func", f.Name, sentenceIdx)
 	compiledSentence := CompiledSentence{
 		VarsArrSize:    0,
 		VarsToIdxs:     map[string][][]int{},
@@ -835,7 +818,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 	switch node.GetResultType() {
 	case ast.CharactersResultType:
 		cNode := node.(*ast.CharactersResultNode)
-		cmd := "result.Insert(result.Len(), []runtime.R5Node{"
+		cmd := "result = result.Insert(result.Len(), []runtime.R5Node{"
 		for _, c := range cNode.Value {
 			cmd += fmt.Sprintf("&runtime.R5NodeChar{Char: %d}, ", c)
 		}
@@ -872,7 +855,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: %s}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: %s}})",
 				sNode.Value,
 			),
 		}
@@ -881,7 +864,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{Name: %s}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{Name: %s}})",
 				wNode.Value,
 			),
 		}
@@ -890,7 +873,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeNumber{Number: %d}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeNumber{Number: %d}})",
 				nNode.Value,
 			),
 		}

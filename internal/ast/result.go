@@ -1,5 +1,7 @@
 package ast
 
+import "fmt"
+
 type ResultType int
 
 const (
@@ -158,4 +160,35 @@ func ReplaceResultVariable(
 	}
 
 	return result
+}
+
+func PrintResult(result ResultNode) {
+	switch result.GetResultType() {
+	case NumberResultType:
+		n := result.(*NumberResultNode)
+		fmt.Printf("(Number %d)\n", n.Value)
+	case StringResultType:
+		n := result.(*StringResultNode)
+		fmt.Printf("(String %d)\n", n.Value)
+	case CharactersResultType:
+		n := result.(*CharactersResultNode)
+		fmt.Printf("(Char %s)\n", string(n.Value))
+	case VarResultType:
+		n := result.(*VarResultNode)
+		fmt.Printf("(Var %s %s)\n", n.GetVarTypeStr(), n.Name)
+	case FunctionCallResultType:
+		n := result.(*FunctionCallResultNode)
+		fmt.Printf("<%s\n", n.Ident)
+		for _, arg := range n.Args {
+			PrintResult(arg)
+		}
+		fmt.Printf(">", n.Ident)
+	case GroupedResultType:
+		n := result.(*GroupedResultNode)
+		fmt.Printf("(\n")
+		for _, g := range n.Results {
+			PrintResult(g)
+		}
+		fmt.Printf(")\n")
+	}
 }

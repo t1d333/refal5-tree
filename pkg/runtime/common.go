@@ -1,5 +1,7 @@
 package runtime
 
+import "fmt"
+
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -463,7 +465,6 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 	viewFieldRhs := initViewField
 
 	for len(viewFieldRhs) > 0 {
-		// PrintViewField(append(viewFieldLhs, viewFieldRhs...))
 		curr := viewFieldRhs[0]
 		viewFieldRhs = viewFieldRhs[1:]
 
@@ -497,8 +498,18 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 					[]ViewFieldNode{&RopeViewFieldNode{Value: grouped}},
 					viewFieldRhs...)
 
+			} else if _, ok := viewFieldLhs[len(viewFieldLhs)-1].(*OpenBracketViewFieldNode); ok {
+				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-1]
+				grouped := NewRope([]R5Node{
+					&R5NodeOpenBracket{CloseOffset: 1},
+					&R5NodeCloseBracket{OpenOffset: 1},
+				})
+
+				viewFieldRhs = append(
+					[]ViewFieldNode{&RopeViewFieldNode{Value: grouped}},
+					viewFieldRhs...)
 			} else {
-				PrintViewField(viewFieldLhs)
+				fmt.Println(31231231231231)
 			}
 
 		case RopeType:
@@ -618,10 +629,10 @@ func BuildRopeViewFieldNode(r *Rope, viewField *[]ViewFieldNode) {
 
 func CopyExprTermVar(l, r int, src, dst *Rope) {
 	for i := l; i <= r; i++ {
-		dst.Insert(dst.Len(), []R5Node{src.Get(i)})
+		*dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
 	}
 }
 
 func CopySymbolVar(i int, src, dst *Rope) {
-	dst.Insert(dst.Len(), []R5Node{src.Get(i)})
+	*dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
 }

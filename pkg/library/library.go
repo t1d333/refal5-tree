@@ -17,7 +17,7 @@ func R5tCard(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		rope := runtime.NewRope([]runtime.R5Node{})
 		for _, b := range lineBytes {
 			charNode := &runtime.R5NodeChar{Char: b}
-			rope.Insert(rope.Len(), []runtime.R5Node{charNode})
+			rope = rope.Insert(rope.Len(), []runtime.R5Node{charNode})
 
 		}
 

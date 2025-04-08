@@ -334,29 +334,27 @@ func (r *Rope) Split(i int) (*Rope, *Rope) {
 	}
 }
 
-func (r *Rope) Insert(i int, data []R5Node) {
+func (r *Rope) Insert(i int, data []R5Node) *Rope {
 	if i < 0 || i > r.Len() {
-		return
+		return nil
 	}
 
 	tmp := NewRope(data)
 
 	if i == 0 {
-		tmp = tmp.ConcatWithRebalance(r)
-		r.root = tmp.root
-		return
+		return tmp.Concat(r)
+		// r.root = tmp.root
+		// return
 	}
 
 	if i == r.Len() {
-		tmp = r.ConcatWithRebalance(tmp)
-		r.root = tmp.root
-		return
+		result := r.Concat(tmp)
+		return result
 	}
 
 	tmpLhs, tmpRhs := r.Split(i)
-	tmp = tmpLhs.ConcatWithRebalance(tmp)
-	tmp = tmp.ConcatWithRebalance(tmpRhs)
-	r.root = tmp.root
+	tmp = tmpLhs.Concat(tmp)
+	return tmp.Concat(tmpRhs)
 }
 
 func (r *Rope) Delete(i int) {
