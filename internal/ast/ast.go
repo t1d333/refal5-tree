@@ -514,11 +514,7 @@ func (a *AST) BuildConditionTemplate(
 				Type: ExprVarType,
 			}, &VarPatternNode{Name: fmt.Sprintf("%sVar", openEvars[target].Name), Type: ExprVarType})
 			continue
-		} else if templateType == T5TemplateType {
-			*result = append(*result, curr)
-			continue
 		}
-
 		if varNode.Name == openEvars[target].Name {
 			if templateType == T1TemplateType {
 				// (e.X_fix) t.X_next e.X_rest
@@ -620,19 +616,43 @@ func (a *AST) BuildConditionTemplate(
 				)
 				break
 			}
-		}
+		} else if templateType == T5TemplateType {
+			isInactive := false
+			for i := target + 1; i < len(openEvars); i++ {
+				openVar := openEvars[i]
+				if varNode.Name == openVar.Name {
+					*result = append(*result, &GroupedPatternNode{Patterns: []PatternNode{
+						varNode,
+					}})
+					isInactive = true
+				}
+			}
 
-		for i := 0; i < target; i++ {
-			openVar := openEvars[i]
-			if varNode.Name == openVar.Name {
-				*result = append(*result, &VarPatternNode{
-					Name: fmt.Sprintf("%sRest", varNode.Name),
-					Type: ExprVarType,
+			if !isInactive {
+				*result = append(*result, varNode)
+			}
+		} else {
+			isInactive := false
+			for i := 0; i < target; i++ {
+				openVar := openEvars[i]
+				if varNode.Name == openVar.Name {
+					*result = append(*result, &VarPatternNode{
+						Name: fmt.Sprintf("%sRest", varNode.Name),
+						Type: ExprVarType,
+					})
+					queue = []PatternNode{}
+					isInactive = true
+					break
+				}
+			}
+
+			if !isInactive {
+				*result = append(*result, &GroupedPatternNode{
+					Patterns: []PatternNode{varNode},
 				})
-				queue = []PatternNode{}
-				break
 			}
 		}
+
 	}
 
 	for i := len(resultRhs) - 1; i >= 0; i-- {
