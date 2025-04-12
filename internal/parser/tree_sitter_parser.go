@@ -73,8 +73,12 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 		result.Functions = append(result.Functions, funcAstNode)
 	}
 
-	declarations, _ := p.walkExternalDeclarations(root, source)
-	fmt.Println(declarations)
+	declarations, err := p.walkExternalDeclarations(root, source)
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk external declarations: %w", err)
+	}
+
+	result.ExternalDeclarations = declarations
 
 	return result, nil
 }
@@ -112,16 +116,17 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 		lhs := []ast.PatternNode{}
 
 		// walk lhs
-		for i := 0; i < int(sentenceLhsNode.ChildCount()); i++ {
-			lhsPartNode := sentenceLhsNode.Child(i)
+		if sentenceLhsNode != nil {
+			for i := 0; i < int(sentenceLhsNode.ChildCount()); i++ {
+				lhsPartNode := sentenceLhsNode.Child(i)
 
-			// TODO: check error
-			lhsPart, _ := p.walkPattern(lhsPartNode, source)
-			lhs = append(lhs, lhsPart)
+				// TODO: check error
+				lhsPart, _ := p.walkPattern(lhsPartNode, source)
+				lhs = append(lhs, lhsPart)
+			}
 		}
 
 		astSentenceNode.Lhs = lhs
-
 		// walk conditions
 
 		for j := 0; j < int(sentenceNode.ChildCount()); j++ {
@@ -225,7 +230,9 @@ func (p *TreeSitterRefal5Parser) walkPattern(
 		}
 		return pattern, nil
 	case "symbols":
-		return &ast.CharactersPatternNode{Value: []byte(node.Content(source))}, nil
+		chars := []byte(node.Content(source))[1:]
+		chars = chars[:len(chars)-1]
+		return &ast.CharactersPatternNode{Value: chars}, nil
 	}
 
 	return nil, fmt.Errorf("undefined pattern")
@@ -259,7 +266,7 @@ func (p *TreeSitterRefal5Parser) walkResult(
 			Name: node.ChildByFieldName("name").Content(source),
 			Type: varType,
 		}, nil
-	case "grouped_result":
+	case "grouped_expr":
 		pattern := &ast.GroupedResultNode{Results: []ast.ResultNode{}}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
@@ -274,7 +281,9 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		}
 		return pattern, nil
 	case "symbols":
-		return &ast.CharactersResultNode{Value: []byte(node.Content(source))}, nil
+		chars := []byte(node.Content(source))[1:]
+		chars = chars[:len(chars)-1]
+		return &ast.CharactersResultNode{Value: chars}, nil
 	case "function_call":
 		functionCallNode := &ast.FunctionCallResultNode{
 			Ident: "",
@@ -294,6 +303,7 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		return functionCallNode, nil
 	}
 
+	
 	return nil, fmt.Errorf("undefined result")
 }
 
