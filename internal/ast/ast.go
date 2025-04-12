@@ -128,7 +128,7 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 			// build i forward func
 			forwardFunc := t.BuildForwardFunction(i, f, sentence, openEvarList)
 			// build i next func
-			nextFunc := t.BuildNextFunction(i, f, sentence, firstConditon, openEvarList)
+			nextFunc := t.BuildNextFunction(i, f, sentence, firstConditon, variables, openEvarList)
 
 			t.Functions = append(t.Functions, forwardFunc)
 			t.Functions = append(t.Functions, nextFunc)
@@ -294,6 +294,7 @@ func (a *AST) BuildNextFunction(
 	originFunc *FunctionNode,
 	originSentence *SentenceNode,
 	condition *ConditionNode,
+	lhsVariables []PatternNode,
 	openEvars []*VarPatternNode,
 ) *FunctionNode {
 	targetVariable := openEvars[k]
@@ -308,8 +309,6 @@ func (a *AST) BuildNextFunction(
 			Name: fmt.Sprintf("%sVar", targetVariable.Name),
 		},
 	}
-
-	lhsVariables := ExtractVars(originSentence.Lhs)
 
 	for i, n := range lhsVariables {
 		varNode := n.(*VarPatternNode)
@@ -496,6 +495,9 @@ func (a *AST) BuildConditionTemplate(
 			})
 			varsSeen[varNode.Name] = struct{}{}
 			continue
+		} else if templateType == T0TemplateType {
+			*result = append(*result, curr)
+			continue
 		}
 
 		if _, ok := varsSeen[varNode.Name]; !ok && templateType == T5TemplateType &&
@@ -515,6 +517,7 @@ func (a *AST) BuildConditionTemplate(
 			}, &VarPatternNode{Name: fmt.Sprintf("%sVar", openEvars[target].Name), Type: ExprVarType})
 			continue
 		}
+
 		if varNode.Name == openEvars[target].Name {
 			if templateType == T1TemplateType {
 				// (e.X_fix) t.X_next e.X_rest

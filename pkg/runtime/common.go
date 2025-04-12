@@ -223,7 +223,7 @@ func R5tBracketsRight(i, left, right int, r *Rope, idxs []int) bool {
 	}
 
 	bracketNode := nodeRight.(*R5NodeCloseBracket)
-	idxs[i] = bracketNode.OpenOffset
+	idxs[i] = right - bracketNode.OpenOffset
 	idxs[i+1] = right
 
 	return true

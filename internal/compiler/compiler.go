@@ -593,7 +593,7 @@ func (c *Compiler) GenerateSentence(
 					patterns: grouped.Patterns,
 					borders:  [][]int{{nextBorder, nextBorder + 1}},
 				})
-				borders = append([][]int{{left, nextBorder + 1}}, borders...)
+				borders = append([][]int{{left, nextBorder}}, borders...)
 				if len(exprVarLoops) > 0 {
 					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
 						exprVarLoops[len(exprVarLoops)-1].Cmds,
@@ -742,7 +742,7 @@ func (c *Compiler) GenerateSentence(
 					case LeftMatchCmdType:
 						borders = append([][]int{{nextBorder + 1, right}}, borders...)
 					case RightMatchCmdType:
-						borders = append([][]int{{left, nextBorder + 1}}, borders...)
+						borders = append([][]int{{left, nextBorder}}, borders...)
 					}
 					cmd := c.generateMatchCmd(cmdArg)
 
@@ -800,16 +800,9 @@ func (c *Compiler) GenerateSentence(
 
 	}
 
-	// fmt.Print("All vars")
-	// for _, v := range allVars {
-	// 	t := v.(*ast.VarPatternNode)
-	// 	fmt.Print(" ", t.GetVarTypeStr(), t.Name)
-	// }
-	// fmt.Println()
 	tree.BuildHelpFunctionsForSentenceConditions(f, sentenceIdx, allVars, openEvars)
 
 	// TODO: build result
-
 	sentenceRhs := f.Body[sentenceIdx].Rhs.(*ast.SentenceRhsResultNode)
 
 	buildResultCmds := []string{}
