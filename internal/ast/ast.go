@@ -84,7 +84,7 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 		checkFunction.Body = append(checkFunction.Body,
 			//   [перем] e.Other = <F_cont Pat1>;
 			&SentenceNode{
-				Lhs: append(variables, &VarPatternNode{
+				Lhs: append(t.GroupExprPatternVars(variables), &VarPatternNode{
 					Type: ExprVarType,
 					Name: "Other",
 				}),
@@ -677,6 +677,8 @@ func (t *AST) GroupExprPatternVars(patterns []PatternNode) []PatternNode {
 					pattern,
 				},
 			})
+		} else {
+			result = append(result, pattern)
 		}
 	}
 	return result
@@ -697,6 +699,8 @@ func (t *AST) GroupExprResultVars(results []ResultNode) []ResultNode {
 					r,
 				},
 			})
+		} else {
+			result = append(result, r)
 		}
 	}
 	return result

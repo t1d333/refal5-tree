@@ -295,18 +295,6 @@ func (c *Compiler) GenerateFunctionBodyCode(
 
 	i := 0
 	for i < len(function.Body) {
-		// fmt.Println("Lhs")
-		// for _, n := range function.Body[i].Lhs {
-		// 	ast.PrintPattern(n)
-		// }
-
-		// rhs := function.Body[i].Rhs.(*ast.SentenceRhsResultNode)
-
-		// fmt.Println("Rhs")
-		// for _, n := range rhs.Result {
-		// 	ast.PrintResult(n)
-		// }
-
 		compiledSentence := c.GenerateSentence(tree, function, function.Body[i], i)
 		i += 1
 
@@ -334,7 +322,6 @@ func (c *Compiler) GenerateSentence(
 	sentence *ast.SentenceNode,
 	sentenceIdx int,
 ) CompiledSentence {
-	// fmt.Println("Generate sentence for func", f.Name, sentenceIdx)
 	compiledSentence := CompiledSentence{
 		VarsArrSize:    0,
 		VarsToIdxs:     map[string][][]int{},
@@ -528,6 +515,49 @@ func (c *Compiler) GenerateSentence(
 				continue
 			}
 
+			// check if left hole is word
+			if wordNode, ok := patterns[0].(*ast.WordPatternNode); ok {
+				cmdArg.NodeType = FunctionMatchCmdNodeType
+				cmdArg.Side = LeftMatchCmdType
+				cmdArg.Value = fmt.Sprintf("&runtime.R5Function{Name: \"%s\"}", wordNode.Value)
+				cmd := c.generateMatchCmd(cmdArg)
+
+				patterns = patterns[1:]
+				borders = append([][]int{{nextBorder, right}}, borders...)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
+				nextBorder += 1
+				continue
+			}
+
+			// check if right hole is word
+			if wordNode, ok := patterns[len(patterns)-1].(*ast.WordPatternNode); ok {
+				cmdArg.NodeType = FunctionMatchCmdNodeType
+				cmdArg.Side = RightMatchCmdType
+				cmdArg.Value = fmt.Sprintf("&runtime.R5Function{Name: \"%s\"}", wordNode.Value)
+
+				cmd := c.generateMatchCmd(cmdArg)
+
+				patterns = patterns[:len(patterns)-1]
+				borders = append([][]int{{left, nextBorder}}, borders...)
+				if len(exprVarLoops) > 0 {
+					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
+						exprVarLoops[len(exprVarLoops)-1].Cmds,
+						cmd,
+					)
+				} else {
+					cmds = append(cmds, cmd)
+				}
+				nextBorder += 1
+				continue
+			}
+
 			// TODO: check if left hole is bracket
 			if grouped, ok := patterns[0].(*ast.GroupedPatternNode); ok {
 				cmdArg.NodeType = BracketsMatchCmdNodeType
@@ -609,7 +639,7 @@ func (c *Compiler) GenerateSentence(
 				patterns = patterns[:len(patterns)-1]
 			}
 
-			if varNode != nil {
+			if _, ok := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", varNode.GetVarTypeStr(), varNode.Name)]; !ok {
 				allVars = append(allVars, varNode)
 			}
 
@@ -770,6 +800,12 @@ func (c *Compiler) GenerateSentence(
 
 	}
 
+	// fmt.Print("All vars")
+	// for _, v := range allVars {
+	// 	t := v.(*ast.VarPatternNode)
+	// 	fmt.Print(" ", t.GetVarTypeStr(), t.Name)
+	// }
+	// fmt.Println()
 	tree.BuildHelpFunctionsForSentenceConditions(f, sentenceIdx, allVars, openEvars)
 
 	// TODO: build result
@@ -855,7 +891,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: %s}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: \"%s\"}})",
 				sNode.Value,
 			),
 		}
@@ -864,7 +900,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{Name: %s}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{&runtime.R5Function{Name: \"%s\"}}})",
 				wNode.Value,
 			),
 		}
@@ -901,6 +937,8 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 		)
 
 		tmp := []string{
+			"runtime.BuildRopeViewFieldNode(result, localViewField)\n",
+			"result = runtime.NewRope([]runtime.R5Node{})\n",
 			"runtime.BuildOpenBracketViewFieldNode(localViewField)\n",
 		}
 

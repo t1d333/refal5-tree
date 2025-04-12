@@ -1,7 +1,5 @@
 package runtime
 
-import "fmt"
-
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -508,10 +506,7 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 				viewFieldRhs = append(
 					[]ViewFieldNode{&RopeViewFieldNode{Value: grouped}},
 					viewFieldRhs...)
-			} else {
-				fmt.Println(31231231231231)
 			}
-
 		case RopeType:
 			if len(viewFieldLhs) == 0 {
 				viewFieldLhs = append(viewFieldLhs, curr)
