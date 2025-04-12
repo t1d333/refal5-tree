@@ -79,6 +79,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 	}
 
 	result.ExternalDeclarations = declarations
+	result.RebuildBlockSentences()
 
 	return result, nil
 }
@@ -303,7 +304,6 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		return functionCallNode, nil
 	}
 
-	
 	return nil, fmt.Errorf("undefined result")
 }
 

@@ -1,6 +1,8 @@
 package ast
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type ConditionHelpTemplateType int
 
@@ -18,6 +20,47 @@ const (
 type AST struct {
 	Functions            []*FunctionNode
 	ExternalDeclarations []string
+}
+
+func (t *AST) RebuildBlockSentences() {
+	i := 0
+
+	for ;i < len(t.Functions); i++ {
+		function := t.Functions[i]
+		for idx, sentence := range function.Body {
+			if sentence.Rhs.GetSentenceRhsType() != SentenceRhsBlockType {
+				continue
+			}
+			sentenceBlock := sentence.Rhs.(*SentenceRhsBlockNode)
+
+			// TODO: build func
+			lhsVars := t.ExtractVariables(sentence.Lhs, map[string]interface{}{})
+			groupedLhsVars := t.GroupExprPatternVars(lhsVars)
+			rhsFunction := &FunctionNode{
+				Name:  fmt.Sprintf("%s_%d", function.Name, idx),
+				Entry: false,
+				Body:  []*SentenceNode{},
+			}
+
+			for _, innerSentence := range sentenceBlock.Body {
+				updatedSentence := innerSentence
+				updatedSentence.Lhs = append(groupedLhsVars, updatedSentence.Lhs...)
+				rhsFunction.Body = append(rhsFunction.Body, updatedSentence)
+			}
+
+			t.Functions = append(t.Functions, rhsFunction)
+
+			// TODO: change rhs to call new func
+			function.Body[idx].Rhs = &SentenceRhsResultNode{
+				Result: []ResultNode{
+					&FunctionCallResultNode{
+						Ident: fmt.Sprintf("%s_%d", function.Name, idx),
+						Args:  append(PatternsToResults(groupedLhsVars), sentenceBlock.Result...),
+					},
+				},
+			}
+		}
+	}
 }
 
 func (t *AST) BuildHelpFunctionsForSentenceConditions(
@@ -706,5 +749,32 @@ func (t *AST) GroupExprResultVars(results []ResultNode) []ResultNode {
 			result = append(result, r)
 		}
 	}
+	return result
+}
+
+func (t *AST) ExtractVariables(
+	patterns []PatternNode,
+	varsSeen map[string]interface{},
+) []PatternNode {
+	result := []PatternNode{}
+
+	for _, pattern := range patterns {
+		switch pattern.GetPatternType() {
+		case GroupedPatternType:
+			groupedNode := pattern.(*GroupedPatternNode)
+			result = append(result, t.ExtractVariables(groupedNode.Patterns, varsSeen)...)
+		case VarPatternType:
+			varNode := pattern.(*VarPatternNode)
+			ident := fmt.Sprintf("%s.%s", varNode.GetVarTypeStr(), varNode.Name)
+			if _, ok := varsSeen[ident]; !ok {
+				varsSeen[ident] = struct{}{}
+				result = append(result, varNode)
+			}
+		default:
+			continue
+
+		}
+	}
+
 	return result
 }
