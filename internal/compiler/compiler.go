@@ -884,7 +884,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: \"%s\"}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: %s}})",
 				sNode.Value,
 			),
 		}
