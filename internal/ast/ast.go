@@ -19,7 +19,7 @@ const (
 
 type AST struct {
 	Functions            []*FunctionNode
-	ExternalDeclarations []string
+	ExternalDeclarations map[string]interface{}
 }
 
 func (t *AST) RebuildBlockSentences() {
@@ -33,7 +33,6 @@ func (t *AST) RebuildBlockSentences() {
 			}
 			sentenceBlock := sentence.Rhs.(*SentenceRhsBlockNode)
 
-			// TODO: build func
 			lhsVars := t.ExtractVariables(sentence.Lhs, map[string]interface{}{})
 			groupedLhsVars := t.GroupExprPatternVars(lhsVars)
 			rhsFunction := &FunctionNode{
@@ -50,7 +49,6 @@ func (t *AST) RebuildBlockSentences() {
 
 			t.Functions = append(t.Functions, rhsFunction)
 
-			// TODO: change rhs to call new func
 			function.Body[idx].Rhs = &SentenceRhsResultNode{
 				Result: []ResultNode{
 					&FunctionCallResultNode{
@@ -220,13 +218,6 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 
 	t.Functions = append(t.Functions, checkFunction)
 	t.Functions = append(t.Functions, contFunction)
-
-	//
-	// for i := 0; i <=len(openEvarList); i++ {
-	// 	curr :=
-	// }
-
-	// TODO: if openevar not emty build forward and next functions
 }
 
 func (a *AST) BuildTemplateT0(
@@ -778,3 +769,4 @@ func (t *AST) ExtractVariables(
 
 	return result
 }
+

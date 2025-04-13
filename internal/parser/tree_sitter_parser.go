@@ -37,7 +37,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 
 	result = &ast.AST{
 		Functions:            []*ast.FunctionNode{},
-		ExternalDeclarations: []string{},
+		ExternalDeclarations: map[string]interface{}{},
 	}
 	cursor = sitter.NewQueryCursor()
 	query, _ := sitter.NewQuery([]byte(`
@@ -78,7 +78,10 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 		return nil, fmt.Errorf("failed to walk external declarations: %w", err)
 	}
 
-	result.ExternalDeclarations = declarations
+	for _, declaration := range declarations {
+		result.ExternalDeclarations[declaration] = struct{}{}
+	}
+
 	result.RebuildBlockSentences()
 
 	return result, nil
@@ -92,7 +95,7 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 		return nil, fmt.Errorf("got nil node")
 	}
 
-	sentencies := []*ast.SentenceNode{}
+	sentences := []*ast.SentenceNode{}
 
 	for i := 0; i < int(node.ChildCount()); i++ {
 		inner := node.Child(i)
@@ -181,11 +184,11 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			astSentenceNode.Rhs = astRhsNode
 		}
 
-		sentencies = append(sentencies, astSentenceNode)
+		sentences = append(sentences, astSentenceNode)
 
 	}
 
-	return sentencies, nil
+	return sentences, nil
 }
 
 func (p *TreeSitterRefal5Parser) walkPattern(
@@ -374,5 +377,105 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 }
 
 func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, error) {
+	trees := []*ast.AST{}
+	for idx, prog := range progs {
+		tree, err := p.Parse(prog)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to compile %d file: %w", idx, err)
+		}
+
+		trees = append(trees, tree)
+
+	}
+
+	funcMappings := []map[string]*ast.FunctionNode{}
+
+	for idx := range trees {
+		funcMapping := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
+		// TODO: delete not entry functions and update calls in another trees
+		for _, function := range funcMapping {
+			if !function.Entry {
+				delete(funcMapping, function.Name)
+			}
+		}
+		funcMappings = append(funcMappings, funcMapping)
+	}
+
 	return nil, nil
+}
+
+func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
+	target int,
+	trees []*ast.AST,
+) map[string]*ast.FunctionNode {
+	targetTree := trees[target]
+
+	funcMapping := map[string]*ast.FunctionNode{}
+
+	for idx, function := range targetTree.Functions {
+		updatedFunction := &ast.FunctionNode{
+			Name:  fmt.Sprintf("%s%d", function.Name, target),
+			Entry: function.Entry,
+			Body:  function.Body,
+		}
+		funcMapping[function.Name] = updatedFunction
+
+		targetTree.Functions[idx] = updatedFunction
+	}
+
+	p.UpdateFunctionsCallsForManyFilesCompilation(funcMapping, targetTree, false)
+
+	return funcMapping
+}
+
+func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
+	funcMapping map[string]*ast.FunctionNode,
+	tree *ast.AST,
+	onlyExternals bool,
+) {
+	sentences := []*ast.SentenceNode{}
+	queue := []ast.ResultNode{}
+
+	for _, function := range tree.Functions {
+		sentences = append(sentences, function.Body...)
+	}
+
+	for len(sentences) > 0 {
+		sentence := sentences[0]
+		sentences = sentences[1:]
+		for _, cond := range sentence.Condtitions {
+			queue = append(queue, cond.Result...)
+		}
+
+		sentenceRhs := sentence.Rhs
+
+		if sentenceRhs.GetSentenceRhsType() == ast.SentenceRhsBlockType {
+			blockRhs := sentenceRhs.(*ast.SentenceRhsBlockNode)
+			sentences = append(sentences, blockRhs.Body...)
+			queue = append(queue, blockRhs.Result...)
+		} else {
+			resultRhs := sentenceRhs.(*ast.SentenceRhsResultNode)
+			queue = append(queue, resultRhs.Result...)
+		}
+	}
+
+	for len(queue) > 0 {
+		result := queue[0]
+		queue = queue[1:]
+		
+		if result.GetResultType() == ast.GroupedResultType {
+			groupedNode := result.(*ast.GroupedResultNode)
+			queue = append(queue, groupedNode.Results...)
+			continue
+		}
+
+		if result.GetResultType() != ast.FunctionCallResultType {
+			continue
+		}
+
+		functionCall := result.(*ast.FunctionCallResultNode)
+		if newIdent, ok := funcMapping[functionCall.Ident]; ok {
+			functionCall.Ident = newIdent.Name
+		}
+	}
 }
