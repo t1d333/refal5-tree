@@ -113,8 +113,8 @@ func PatternToResult(node PatternNode) ResultNode {
 			Value: node.Value,
 		}
 	case StringPatternType:
-		node := node.(*NumberPatternNode)
-		return &NumberResultNode{
+		node := node.(*StringPatternNode)
+		return &StringResultNode{
 			Value: node.Value,
 		}
 	case VarPatternType:
