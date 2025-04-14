@@ -388,20 +388,25 @@ func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, error) 
 
 	}
 
-	funcMappings := []map[string]*ast.FunctionNode{}
+	globalFuncMapping := map[string]*ast.FunctionNode{}
 
 	for idx := range trees {
 		funcMapping := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
+		fmt.Println(funcMapping)
 		// TODO: delete not entry functions and update calls in another trees
-		for _, function := range funcMapping {
-			if !function.Entry {
-				delete(funcMapping, function.Name)
+		for name, function := range funcMapping {
+			if function.Entry {
+				globalFuncMapping[name] = function
 			}
 		}
-		funcMappings = append(funcMappings, funcMapping)
+		// funcMappings = append(funcMappings, funcMapping)
 	}
 
-	return nil, nil
+	for idx := range trees {
+		p.UpdateFunctionsCallsForManyFilesCompilation(globalFuncMapping, trees[idx], true)
+	}
+
+	return trees, nil
 }
 
 func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
@@ -462,7 +467,7 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 	for len(queue) > 0 {
 		result := queue[0]
 		queue = queue[1:]
-		
+
 		if result.GetResultType() == ast.GroupedResultType {
 			groupedNode := result.(*ast.GroupedResultNode)
 			queue = append(queue, groupedNode.Results...)
@@ -474,8 +479,11 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 		}
 
 		functionCall := result.(*ast.FunctionCallResultNode)
-		if newIdent, ok := funcMapping[functionCall.Ident]; ok {
-			functionCall.Ident = newIdent.Name
+		if function, ok := funcMapping[functionCall.Ident]; ok {
+			if _, ok := tree.ExternalDeclarations[functionCall.Ident]; (ok && onlyExternals) ||
+				!onlyExternals {
+				functionCall.Ident = function.Name
+			}
 		}
 	}
 }

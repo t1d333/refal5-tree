@@ -223,14 +223,11 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 		}
 
 		sources = append(sources, code)
-
-		for _, source := range sources {
-			ast, _ := c.parser.Parse(source)
-			trees = append(trees, ast)
-		}
-
-		c.Generate(trees)
 	}
+
+	trees, _ = c.parser.ParseFiles(sources)
+	fmt.Println(trees)
+	c.Generate(trees)
 }
 
 func (c *Compiler) readFile(path string) ([]byte, error) {
@@ -275,13 +272,13 @@ func (c *Compiler) Generate(trees []*ast.AST) (string, error) {
 
 			functions = append(functions, compiled)
 		}
-
-		c.compiledProgramTmpl.Execute(os.Stdout,
-			CompiledProgram{
-				Functions: functions,
-			},
-		)
 	}
+	
+	c.compiledProgramTmpl.Execute(os.Stdout,
+		CompiledProgram{
+			Functions: functions,
+		},
+	)
 
 	// mainTmpl.Execute(os.Stdout, compiledProgram{Functions: generatedFunctions})
 	return "", nil
