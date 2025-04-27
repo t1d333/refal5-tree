@@ -173,6 +173,13 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			astSentenceNode.Rhs = astRhsNode
 		case ast.SentenceRhsResultType:
 			rhsNode := sentenceNode.ChildByFieldName("rhs")
+
+			if rhsNode == nil {
+
+				sentences = append(sentences, astSentenceNode)
+				continue
+			}
+
 			astRhsNode := &ast.SentenceRhsResultNode{
 				Result: []ast.ResultNode{},
 			}
@@ -399,7 +406,7 @@ func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, *ast.Fu
 			}
 		}
 	}
-	
+
 	for idx := range trees {
 		p.UpdateFunctionsCallsForManyFilesCompilation(globalFuncMapping, trees[idx], true)
 	}
