@@ -230,7 +230,14 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 		sources = append(sources, code)
 	}
 
-	trees, goFunc, _ := c.parser.ParseFiles(sources)
+	trees, goFunc, errors := c.parser.ParseFiles(sources)
+	if len(errors) > 0 {
+		for _, err := range errors {
+			fmt.Println(err)
+		}
+
+		return
+	}
 	c.Generate(trees, goFunc)
 }
 

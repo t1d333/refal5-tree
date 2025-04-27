@@ -25,20 +25,50 @@ func NewTreeSitterRefal5Parser() Refal5Parser {
 func (p *TreeSitterRefal5Parser) GetSymbolTable() {
 }
 
-func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
+func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 	var result *ast.AST
 	var cursor *sitter.QueryCursor
 	tree, err := p.parser.ParseCtx(context.Background(), nil, source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse source code: %w", err)
+		return nil, []error{fmt.Errorf("failed to parse source code: %w", err)}
 	}
 
 	root := tree.RootNode()
+
+	errors := []error{}
+	iter := sitter.NewIterator(root, sitter.BFSMode)
+
+	for {
+		node, err := iter.Next()
+		if err != nil {
+			break
+		}
+		if node == nil || !node.HasError() {
+			continue
+		}
+		if node.IsMissing() {
+			errors = append(
+				errors,
+				fmt.Errorf(
+					"(Line: %d, Column: %d) Expected %s, but not found",
+					node.Range().StartPoint.Row + 1,
+					node.Range().StartPoint.Column + 1,
+				),
+			)
+		} else if node.IsError() {
+			errors = append(errors, fmt.Errorf("(Line: %d, Column: %d)-(Line: %d, Column: %d) Unexpected sequence of characters", node.Range().StartPoint.Row + 1, node.Range().StartPoint.Column + 1, node.Range().EndPoint.Row + 1, node.Range().EndPoint.Column + 1))
+		}
+	}
+
+	if len(errors) > 0 {
+		return nil, errors
+	}
 
 	result = &ast.AST{
 		Functions:            []*ast.FunctionNode{},
 		ExternalDeclarations: map[string]interface{}{},
 	}
+
 	cursor = sitter.NewQueryCursor()
 	query, _ := sitter.NewQuery([]byte(`
 	(function_definition
@@ -66,7 +96,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 		funcAstNode.Name = funcNameNode.Content(source)
 		sentences, err := p.walkFunctionBody(funcBodyNode, source)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build ast: %w", err)
+			return nil, []error{fmt.Errorf("failed to build ast: %w", err)}
 		}
 
 		funcAstNode.Body = sentences
@@ -75,7 +105,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 
 	declarations, err := p.walkExternalDeclarations(root, source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to walk external declarations: %w", err)
+		return nil, []error{fmt.Errorf("failed to walk external declarations: %w", err)}
 	}
 
 	for _, declaration := range declarations {
@@ -383,17 +413,23 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 	return externals, nil
 }
 
-func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, *ast.FunctionNode, error) {
+func (p *TreeSitterRefal5Parser) ParseFiles(
+	progs [][]byte,
+) ([]*ast.AST, *ast.FunctionNode, []error) {
 	var goFunctPtr *ast.FunctionNode = nil
 	trees := []*ast.AST{}
-	for idx, prog := range progs {
-		tree, err := p.Parse(prog)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Failed to compile %d file: %w", idx, err)
-		}
+	parseErrors := []error{}
+	for _, prog := range progs {
+		tree, errors := p.Parse(prog)
+
+		parseErrors = append(parseErrors, errors...)
 
 		trees = append(trees, tree)
 
+	}
+
+	if len(parseErrors) > 0 {
+		return nil, nil, parseErrors
 	}
 
 	globalFuncMapping := map[string]*ast.FunctionNode{}
