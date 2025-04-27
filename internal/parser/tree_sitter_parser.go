@@ -376,12 +376,13 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 	return externals, nil
 }
 
-func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, error) {
+func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, *ast.FunctionNode, error) {
+	var goFunctPtr *ast.FunctionNode = nil
 	trees := []*ast.AST{}
 	for idx, prog := range progs {
 		tree, err := p.Parse(prog)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to compile %d file: %w", idx, err)
+			return nil, nil, fmt.Errorf("Failed to compile %d file: %w", idx, err)
 		}
 
 		trees = append(trees, tree)
@@ -392,21 +393,24 @@ func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, error) 
 
 	for idx := range trees {
 		funcMapping := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
-		fmt.Println(funcMapping)
-		// TODO: delete not entry functions and update calls in another trees
 		for name, function := range funcMapping {
 			if function.Entry {
 				globalFuncMapping[name] = function
 			}
 		}
-		// funcMappings = append(funcMappings, funcMapping)
 	}
-
+	
 	for idx := range trees {
 		p.UpdateFunctionsCallsForManyFilesCompilation(globalFuncMapping, trees[idx], true)
 	}
 
-	return trees, nil
+	if f, ok := globalFuncMapping["GO"]; ok {
+		goFunctPtr = f
+	} else {
+		goFunctPtr = globalFuncMapping["Go"]
+	}
+
+	return trees, goFunctPtr, nil
 }
 
 func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
@@ -479,6 +483,7 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 		}
 
 		functionCall := result.(*ast.FunctionCallResultNode)
+		queue = append(queue, functionCall.Args...)
 		if function, ok := funcMapping[functionCall.Ident]; ok {
 			if _, ok := tree.ExternalDeclarations[functionCall.Ident]; (ok && onlyExternals) ||
 				!onlyExternals {
