@@ -51,12 +51,12 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 				errors,
 				fmt.Errorf(
 					"(Line: %d, Column: %d) Expected %s, but not found",
-					node.Range().StartPoint.Row + 1,
-					node.Range().StartPoint.Column + 1,
+					node.Range().StartPoint.Row+1,
+					node.Range().StartPoint.Column+1,
 				),
 			)
 		} else if node.IsError() {
-			errors = append(errors, fmt.Errorf("(Line: %d, Column: %d)-(Line: %d, Column: %d) Unexpected sequence of characters", node.Range().StartPoint.Row + 1, node.Range().StartPoint.Column + 1, node.Range().EndPoint.Row + 1, node.Range().EndPoint.Column + 1))
+			errors = append(errors, fmt.Errorf("(Line: %d, Column: %d)-(Line: %d, Column: %d) Unexpected sequence of characters", node.Range().StartPoint.Row+1, node.Range().StartPoint.Column+1, node.Range().EndPoint.Row+1, node.Range().EndPoint.Column+1))
 		}
 	}
 
@@ -418,18 +418,18 @@ func (p *TreeSitterRefal5Parser) ParseFiles(
 ) ([]*ast.AST, *ast.FunctionNode, []error) {
 	var goFunctPtr *ast.FunctionNode = nil
 	trees := []*ast.AST{}
-	parseErrors := []error{}
+	errors := []error{}
 	for _, prog := range progs {
-		tree, errors := p.Parse(prog)
+		tree, fileErrors := p.Parse(prog)
 
-		parseErrors = append(parseErrors, errors...)
+		errors = append(errors, fileErrors...)
 
 		trees = append(trees, tree)
 
 	}
 
-	if len(parseErrors) > 0 {
-		return nil, nil, parseErrors
+	if len(errors) > 0 {
+		return nil, nil, errors
 	}
 
 	globalFuncMapping := map[string]*ast.FunctionNode{}
@@ -438,6 +438,11 @@ func (p *TreeSitterRefal5Parser) ParseFiles(
 		funcMapping := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
 		for name, function := range funcMapping {
 			if function.Entry {
+				if _, ok := globalFuncMapping[name]; ok {
+					return nil, nil, []error{
+						fmt.Errorf("ERROR: Entry function %s is multiple defined", name),
+					}
+				}
 				globalFuncMapping[name] = function
 			}
 		}
