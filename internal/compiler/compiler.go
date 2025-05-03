@@ -168,8 +168,8 @@ type BuildResultCmdArg struct {
 }
 
 type CompiledProgram struct {
-	GoFunctionName string 
-	Functions  []CompiledFunction
+	GoFunctionName string
+	Functions      []CompiledFunction
 }
 
 type CompiledFunction struct {
@@ -220,6 +220,8 @@ func NewRefal5Compiler() *Compiler {
 func (c *Compiler) Compile(files []string, options CompilerOptions) {
 	sources := [][]byte{}
 	trees := []*ast.AST{}
+	foundErrors := false
+
 	for _, file := range files {
 		code, err := c.readFile(file)
 		if err != nil {
@@ -231,13 +233,21 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 	}
 
 	trees, goFunc, errors := c.parser.ParseFiles(sources)
-	if len(errors) > 0 {
-		for _, err := range errors {
-			fmt.Println(err)
+	for i, fileName := range files {
+		fileErrors := errors[i]
+		foundErrors = len(fileErrors) > 0 || foundErrors
+		if len(fileErrors) > 0 {
+			for _, err := range fileErrors {
+				fmt.Fprintf(os.Stderr, "%s: ERROR %s\n", fileName, err.Error())
+			}
 		}
 
+	}
+
+	if foundErrors {
 		return
 	}
+
 	c.Generate(trees, goFunc)
 }
 
@@ -296,7 +306,7 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 	c.compiledProgramTmpl.Execute(os.Stdout,
 		CompiledProgram{
 			GoFunctionName: goFunc.Name,
-			Functions:  functions,
+			Functions:      functions,
 		},
 	)
 
