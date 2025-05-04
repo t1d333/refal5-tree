@@ -793,7 +793,6 @@ func (t *AST) collectVariables(p []PatternNode) map[string]interface{} {
 
 func (t *AST) checkResultVarUsage(result []ResultNode, variables map[string]interface{}) []error {
 	errors := []error{}
-	// variables := map[string]interface{}{}
 	queue := result
 
 	for len(queue) > 0 {
@@ -806,10 +805,12 @@ func (t *AST) checkResultVarUsage(result []ResultNode, variables map[string]inte
 			if _, ok := variables[ident]; !ok {
 				errors = append(errors, fmt.Errorf("Variable %s not found", ident))
 			}
-
 		} else if curr.GetResultType() == GroupedResultType {
 			grouped := curr.(*GroupedResultNode)
 			queue = append(queue, grouped.Results...)
+		} else if curr.GetResultType() == FunctionCallResultType {
+			call := curr.(*FunctionCallResultNode)
+			queue = append(queue, call.Args...)
 		}
 	}
 

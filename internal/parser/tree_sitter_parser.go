@@ -47,7 +47,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 			errors = append(
 				errors,
 				fmt.Errorf(
-					"ERROR: (Line: %d, Column: %d) Expected '%s', but not found",
+					"(Line: %d, Column: %d) Expected '%s', but not found",
 					node.Range().StartPoint.Row+1,
 					node.Range().StartPoint.Column+1,
 					node.Type(),
@@ -439,12 +439,14 @@ func (p *TreeSitterRefal5Parser) ParseFiles(
 	globalFuncMapping := map[string]*ast.FunctionNode{}
 	// localFuncMapping := make([]map[string]*ast.FunctionNode, len(progs))
 	funcToSourceMapping := map[string]int{}
+	newFuncMapping := map[string]*ast.FunctionNode{}
 
 	for idx := range trees {
 		funcMapping, fileErrors := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
 		foundErrors = len(fileErrors) > 0 || foundErrors
 		errors[idx] = append(errors[idx], fileErrors...)
 		for name, function := range funcMapping {
+			newFuncMapping[function.Name] = function
 			if function.Entry {
 				if j, ok := funcToSourceMapping[name]; ok {
 					foundErrors = true
@@ -462,6 +464,7 @@ func (p *TreeSitterRefal5Parser) ParseFiles(
 	for idx := range trees {
 		fileErrors := p.UpdateFunctionsCallsForManyFilesCompilation(
 			globalFuncMapping,
+			newFuncMapping,
 			trees[idx],
 			true,
 			true,
@@ -487,6 +490,7 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
 	errors := []error{}
 
 	funcMapping := map[string]*ast.FunctionNode{}
+	newToOldFuncMapping := map[string]*ast.FunctionNode{}
 
 	for idx, function := range targetTree.Functions {
 		updatedFunction := &ast.FunctionNode{
@@ -501,17 +505,25 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
 		}
 
 		funcMapping[function.Name] = updatedFunction
+		newToOldFuncMapping[updatedFunction.Name] = updatedFunction
 
 		targetTree.Functions[idx] = updatedFunction
 	}
 
-	p.UpdateFunctionsCallsForManyFilesCompilation(funcMapping, targetTree, false, false)
+	p.UpdateFunctionsCallsForManyFilesCompilation(
+		funcMapping,
+		newToOldFuncMapping,
+		targetTree,
+		false,
+		false,
+	)
 
 	return funcMapping, errors
 }
 
 func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 	funcMapping map[string]*ast.FunctionNode,
+	newToOldFuncMapping map[string]*ast.FunctionNode,
 	tree *ast.AST,
 	onlyExternals bool,
 	triggerUndefinedCalls bool,
@@ -564,7 +576,7 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 				!onlyExternals {
 				functionCall.Ident = function.Name
 			}
-		} else if triggerUndefinedCalls {
+		} else if _, ok := newToOldFuncMapping[functionCall.Ident]; !ok && triggerUndefinedCalls {
 			errors = append(errors, fmt.Errorf("Function %s is not defined", functionCall.Ident))
 		}
 	}
