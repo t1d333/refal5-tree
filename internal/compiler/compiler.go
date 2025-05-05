@@ -524,7 +524,7 @@ func (c *Compiler) GenerateSentence(
 			if strNode, ok := patterns[len(patterns)-1].(*ast.StringPatternNode); ok {
 				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("%s", strNode.Value)
+				cmdArg.Value = fmt.Sprintf("\"%s\"", strNode.Value)
 
 				cmd := c.generateMatchCmd(cmdArg)
 
@@ -544,9 +544,9 @@ func (c *Compiler) GenerateSentence(
 
 			// check if left hole is word
 			if wordNode, ok := patterns[0].(*ast.WordPatternNode); ok {
-				cmdArg.NodeType = FunctionMatchCmdNodeType
+				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = LeftMatchCmdType
-				cmdArg.Value = fmt.Sprintf("&runtime.R5Function{Name: \"%s\"}", wordNode.Value)
+				cmdArg.Value = fmt.Sprintf("\"%s\"", wordNode.Value)
 				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[1:]
@@ -561,13 +561,14 @@ func (c *Compiler) GenerateSentence(
 				}
 				nextBorder += 1
 				continue
+
 			}
 
 			// check if right hole is word
 			if wordNode, ok := patterns[len(patterns)-1].(*ast.WordPatternNode); ok {
-				cmdArg.NodeType = FunctionMatchCmdNodeType
+				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("&runtime.R5Function{Name: \"%s\"}", wordNode.Value)
+				cmdArg.Value = fmt.Sprintf("%s", wordNode.Value)
 
 				cmd := c.generateMatchCmd(cmdArg)
 
@@ -583,6 +584,7 @@ func (c *Compiler) GenerateSentence(
 				}
 				nextBorder += 1
 				continue
+
 			}
 
 			// TODO: check if left hole is bracket
@@ -920,7 +922,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{&runtime.R5Function{Name: \"%s\"}}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: \"%s\"}})",
 				wNode.Value,
 			),
 		}

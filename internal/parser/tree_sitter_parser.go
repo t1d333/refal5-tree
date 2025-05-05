@@ -22,16 +22,7 @@ func NewTreeSitterRefal5Parser() Refal5Parser {
 	}
 }
 
-func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
-	var result *ast.AST
-	var cursor *sitter.QueryCursor
-	tree, err := p.parser.ParseCtx(context.Background(), nil, source)
-	if err != nil {
-		return nil, []error{fmt.Errorf("failed to parse source code: %w", err)}
-	}
-
-	root := tree.RootNode()
-
+func (p *TreeSitterRefal5Parser) CheckErrors(root *sitter.Node) []error {
 	errors := []error{}
 	iter := sitter.NewIterator(root, sitter.BFSMode)
 
@@ -57,6 +48,19 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 			errors = append(errors, fmt.Errorf("(Line: %d, Column: %d)-(Line: %d, Column: %d) Unexpected sequence of characters", node.Range().StartPoint.Row+1, node.Range().StartPoint.Column+1, node.Range().EndPoint.Row+1, node.Range().EndPoint.Column+1))
 		}
 	}
+	return errors
+}
+
+func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
+	var result *ast.AST
+	var cursor *sitter.QueryCursor
+	tree, err := p.parser.ParseCtx(context.Background(), nil, source)
+	if err != nil {
+		return nil, []error{fmt.Errorf("failed to parse source code: %w", err)}
+	}
+
+	root := tree.RootNode()
+	errors := p.CheckErrors(root)
 
 	if len(errors) > 0 {
 		return nil, errors
@@ -116,6 +120,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 		return nil, errors
 	}
 
+	result.AddMuFunction()
 	result.RebuildBlockSentences()
 
 	return result, errors

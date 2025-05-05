@@ -22,6 +22,76 @@ type AST struct {
 	ExternalDeclarations map[string]interface{}
 }
 
+func (t *AST) AddMuFunction() error {
+	muFunction := &FunctionNode{Name: "Mu", Entry: false, Body: []*SentenceNode{}}
+	// TODO: add stdlib functions
+	// TODO: need exclude go funcs?(GO and Go)
+
+	argPatternVar := &VarPatternNode{
+		Type: ExprVarType,
+		Name: "Arg",
+	}
+
+	functionCallTmp := FunctionCallResultNode{
+		Args: []ResultNode{
+			argPatternVar.ToResultNode(),
+		},
+	}
+	for _, f := range t.Functions {
+		functionCall := functionCallTmp
+		functionCall.Ident = f.Name
+		muFunction.Body = append(muFunction.Body, &SentenceNode{
+			Lhs: []PatternNode{
+				&WordPatternNode{Value: f.Name},
+				argPatternVar,
+			},
+
+			Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+		},
+			&SentenceNode{
+				Lhs: []PatternNode{
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&CharactersPatternNode{Value: []byte(f.Name)},
+						},
+					},
+					argPatternVar,
+				},
+				Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+			},
+		)
+	}
+
+	for f := range t.ExternalDeclarations {
+		functionCall := functionCallTmp
+		functionCall.Ident = f
+		muFunction.Body = append(muFunction.Body, &SentenceNode{
+			Lhs: []PatternNode{
+				&WordPatternNode{Value: f},
+				argPatternVar,
+			},
+
+			Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+		},
+			&SentenceNode{
+				Lhs: []PatternNode{
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&CharactersPatternNode{Value: []byte(f)},
+						},
+					},
+					argPatternVar,
+				},
+				Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+			},
+		)
+	}
+
+	t.Functions = append(t.Functions, muFunction)
+
+	return nil
+}
+
 func (t *AST) RebuildBlockSentences() {
 	i := 0
 
@@ -851,7 +921,7 @@ func (t *AST) checkSentenceVarUsage(
 			errors = append(errors, t.checkSentenceVarUsage(sentence, variables)...)
 		}
 	}
-	
+
 	return errors
 }
 
