@@ -22,23 +22,55 @@ func NewTreeSitterRefal5Parser() Refal5Parser {
 	}
 }
 
-func (p *TreeSitterRefal5Parser) GetSymbolTable() {
+func (p *TreeSitterRefal5Parser) CheckErrors(root *sitter.Node) []error {
+	errors := []error{}
+	iter := sitter.NewIterator(root, sitter.BFSMode)
+
+	for {
+		node, err := iter.Next()
+		if err != nil {
+			break
+		}
+		if node == nil || !node.HasError() {
+			continue
+		}
+		if node.IsMissing() {
+			errors = append(
+				errors,
+				fmt.Errorf(
+					"(Line: %d, Column: %d) Expected '%s', but not found",
+					node.Range().StartPoint.Row+1,
+					node.Range().StartPoint.Column+1,
+					node.Type(),
+				),
+			)
+		} else if node.IsError() {
+			errors = append(errors, fmt.Errorf("(Line: %d, Column: %d)-(Line: %d, Column: %d) Unexpected sequence of characters", node.Range().StartPoint.Row+1, node.Range().StartPoint.Column+1, node.Range().EndPoint.Row+1, node.Range().EndPoint.Column+1))
+		}
+	}
+	return errors
 }
 
-func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
+func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 	var result *ast.AST
 	var cursor *sitter.QueryCursor
 	tree, err := p.parser.ParseCtx(context.Background(), nil, source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse source code: %w", err)
+		return nil, []error{fmt.Errorf("failed to parse source code: %w", err)}
 	}
 
 	root := tree.RootNode()
+	errors := p.CheckErrors(root)
+
+	if len(errors) > 0 {
+		return nil, errors
+	}
 
 	result = &ast.AST{
 		Functions:            []*ast.FunctionNode{},
 		ExternalDeclarations: map[string]interface{}{},
 	}
+
 	cursor = sitter.NewQueryCursor()
 	query, _ := sitter.NewQuery([]byte(`
 	(function_definition
@@ -66,7 +98,7 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 		funcAstNode.Name = funcNameNode.Content(source)
 		sentences, err := p.walkFunctionBody(funcBodyNode, source)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build ast: %w", err)
+			return nil, []error{fmt.Errorf("failed to build ast: %w", err)}
 		}
 
 		funcAstNode.Body = sentences
@@ -75,16 +107,23 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, error) {
 
 	declarations, err := p.walkExternalDeclarations(root, source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to walk external declarations: %w", err)
+		return nil, []error{fmt.Errorf("failed to walk external declarations: %w", err)}
 	}
 
 	for _, declaration := range declarations {
 		result.ExternalDeclarations[declaration] = struct{}{}
 	}
 
+	errors = append(errors, result.CheckVariableUsage()...)
+
+	if len(errors) > 0 {
+		return nil, errors
+	}
+
+	result.AddMuFunction()
 	result.RebuildBlockSentences()
 
-	return result, nil
+	return result, errors
 }
 
 func (p *TreeSitterRefal5Parser) walkFunctionBody(
@@ -173,6 +212,13 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			astSentenceNode.Rhs = astRhsNode
 		case ast.SentenceRhsResultType:
 			rhsNode := sentenceNode.ChildByFieldName("rhs")
+
+			if rhsNode == nil {
+
+				sentences = append(sentences, astSentenceNode)
+				continue
+			}
+
 			astRhsNode := &ast.SentenceRhsResultNode{
 				Result: []ast.ResultNode{},
 			}
@@ -376,32 +422,60 @@ func (p *TreeSitterRefal5Parser) walkExternalDeclarations(
 	return externals, nil
 }
 
-func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, *ast.FunctionNode, error) {
+func (p *TreeSitterRefal5Parser) ParseFiles(
+	progs [][]byte,
+) ([]*ast.AST, *ast.FunctionNode, [][]error) {
 	var goFunctPtr *ast.FunctionNode = nil
 	trees := []*ast.AST{}
-	for idx, prog := range progs {
-		tree, err := p.Parse(prog)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Failed to compile %d file: %w", idx, err)
-		}
+	errors := make([][]error, len(progs))
+	foundErrors := false
 
+	for i, prog := range progs {
+		tree, fileErrors := p.Parse(prog)
+		foundErrors = len(fileErrors) > 0 || foundErrors
+		errors[i] = append(errors[i], fileErrors...)
 		trees = append(trees, tree)
+	}
 
+	if foundErrors {
+		return nil, nil, errors
 	}
 
 	globalFuncMapping := map[string]*ast.FunctionNode{}
+	// localFuncMapping := make([]map[string]*ast.FunctionNode, len(progs))
+	funcToSourceMapping := map[string]int{}
+	newFuncMapping := map[string]*ast.FunctionNode{}
 
 	for idx := range trees {
-		funcMapping := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
+		funcMapping, fileErrors := p.UpdateFunctionsForManyFilesCompilation(idx, trees)
+		foundErrors = len(fileErrors) > 0 || foundErrors
+		errors[idx] = append(errors[idx], fileErrors...)
 		for name, function := range funcMapping {
+			newFuncMapping[function.Name] = function
 			if function.Entry {
-				globalFuncMapping[name] = function
+				if j, ok := funcToSourceMapping[name]; ok {
+					foundErrors = true
+					err := fmt.Errorf("Entry function %s is multiple defined", name)
+					errors[idx] = append(errors[idx], err)
+					errors[j] = append(errors[j], err)
+				} else {
+					funcToSourceMapping[name] = idx
+					globalFuncMapping[name] = function
+				}
 			}
 		}
 	}
-	
+
 	for idx := range trees {
-		p.UpdateFunctionsCallsForManyFilesCompilation(globalFuncMapping, trees[idx], true)
+		fileErrors := p.UpdateFunctionsCallsForManyFilesCompilation(
+			globalFuncMapping,
+			newFuncMapping,
+			trees[idx],
+			true,
+			true,
+		)
+		foundErrors = len(fileErrors) > 0 || foundErrors
+		errors[idx] = append(errors[idx], fileErrors...)
 	}
 
 	if f, ok := globalFuncMapping["GO"]; ok {
@@ -410,16 +484,18 @@ func (p *TreeSitterRefal5Parser) ParseFiles(progs [][]byte) ([]*ast.AST, *ast.Fu
 		goFunctPtr = globalFuncMapping["Go"]
 	}
 
-	return trees, goFunctPtr, nil
+	return trees, goFunctPtr, errors
 }
 
 func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
 	target int,
 	trees []*ast.AST,
-) map[string]*ast.FunctionNode {
+) (map[string]*ast.FunctionNode, []error) {
 	targetTree := trees[target]
+	errors := []error{}
 
 	funcMapping := map[string]*ast.FunctionNode{}
+	newToOldFuncMapping := map[string]*ast.FunctionNode{}
 
 	for idx, function := range targetTree.Functions {
 		updatedFunction := &ast.FunctionNode{
@@ -427,23 +503,39 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsForManyFilesCompilation(
 			Entry: function.Entry,
 			Body:  function.Body,
 		}
+
+		if _, ok := funcMapping[function.Name]; ok {
+			errors = append(errors,
+				fmt.Errorf("Function %s is multiple defined", function.Name))
+		}
+
 		funcMapping[function.Name] = updatedFunction
+		newToOldFuncMapping[updatedFunction.Name] = updatedFunction
 
 		targetTree.Functions[idx] = updatedFunction
 	}
 
-	p.UpdateFunctionsCallsForManyFilesCompilation(funcMapping, targetTree, false)
+	p.UpdateFunctionsCallsForManyFilesCompilation(
+		funcMapping,
+		newToOldFuncMapping,
+		targetTree,
+		false,
+		false,
+	)
 
-	return funcMapping
+	return funcMapping, errors
 }
 
 func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 	funcMapping map[string]*ast.FunctionNode,
+	newToOldFuncMapping map[string]*ast.FunctionNode,
 	tree *ast.AST,
 	onlyExternals bool,
-) {
+	triggerUndefinedCalls bool,
+) []error {
 	sentences := []*ast.SentenceNode{}
 	queue := []ast.ResultNode{}
+	errors := []error{}
 
 	for _, function := range tree.Functions {
 		sentences = append(sentences, function.Body...)
@@ -489,6 +581,10 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 				!onlyExternals {
 				functionCall.Ident = function.Name
 			}
+		} else if _, ok := newToOldFuncMapping[functionCall.Ident]; !ok && triggerUndefinedCalls {
+			errors = append(errors, fmt.Errorf("Function %s is not defined", functionCall.Ident))
 		}
 	}
+
+	return errors
 }

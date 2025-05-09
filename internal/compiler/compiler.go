@@ -168,8 +168,8 @@ type BuildResultCmdArg struct {
 }
 
 type CompiledProgram struct {
-	GoFunctionName string 
-	Functions  []CompiledFunction
+	GoFunctionName string
+	Functions      []CompiledFunction
 }
 
 type CompiledFunction struct {
@@ -220,6 +220,8 @@ func NewRefal5Compiler() *Compiler {
 func (c *Compiler) Compile(files []string, options CompilerOptions) {
 	sources := [][]byte{}
 	trees := []*ast.AST{}
+	foundErrors := false
+
 	for _, file := range files {
 		code, err := c.readFile(file)
 		if err != nil {
@@ -230,7 +232,22 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 		sources = append(sources, code)
 	}
 
-	trees, goFunc, _ := c.parser.ParseFiles(sources)
+	trees, goFunc, errors := c.parser.ParseFiles(sources)
+	for i, fileName := range files {
+		fileErrors := errors[i]
+		foundErrors = len(fileErrors) > 0 || foundErrors
+		if len(fileErrors) > 0 {
+			for _, err := range fileErrors {
+				fmt.Fprintf(os.Stderr, "%s: ERROR %s\n", fileName, err.Error())
+			}
+		}
+
+	}
+
+	if foundErrors {
+		return
+	}
+
 	c.Generate(trees, goFunc)
 }
 
@@ -289,7 +306,7 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 	c.compiledProgramTmpl.Execute(os.Stdout,
 		CompiledProgram{
 			GoFunctionName: goFunc.Name,
-			Functions:  functions,
+			Functions:      functions,
 		},
 	)
 
@@ -507,7 +524,7 @@ func (c *Compiler) GenerateSentence(
 			if strNode, ok := patterns[len(patterns)-1].(*ast.StringPatternNode); ok {
 				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("%s", strNode.Value)
+				cmdArg.Value = fmt.Sprintf("\"%s\"", strNode.Value)
 
 				cmd := c.generateMatchCmd(cmdArg)
 
@@ -527,9 +544,9 @@ func (c *Compiler) GenerateSentence(
 
 			// check if left hole is word
 			if wordNode, ok := patterns[0].(*ast.WordPatternNode); ok {
-				cmdArg.NodeType = FunctionMatchCmdNodeType
+				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = LeftMatchCmdType
-				cmdArg.Value = fmt.Sprintf("&runtime.R5Function{Name: \"%s\"}", wordNode.Value)
+				cmdArg.Value = fmt.Sprintf("\"%s\"", wordNode.Value)
 				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[1:]
@@ -544,13 +561,14 @@ func (c *Compiler) GenerateSentence(
 				}
 				nextBorder += 1
 				continue
+
 			}
 
 			// check if right hole is word
 			if wordNode, ok := patterns[len(patterns)-1].(*ast.WordPatternNode); ok {
-				cmdArg.NodeType = FunctionMatchCmdNodeType
+				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("&runtime.R5Function{Name: \"%s\"}", wordNode.Value)
+				cmdArg.Value = fmt.Sprintf("%s", wordNode.Value)
 
 				cmd := c.generateMatchCmd(cmdArg)
 
@@ -566,6 +584,7 @@ func (c *Compiler) GenerateSentence(
 				}
 				nextBorder += 1
 				continue
+
 			}
 
 			// TODO: check if left hole is bracket
@@ -903,7 +922,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeFunction{&runtime.R5Function{Name: \"%s\"}}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: \"%s\"}})",
 				wNode.Value,
 			),
 		}

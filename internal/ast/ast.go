@@ -22,10 +22,80 @@ type AST struct {
 	ExternalDeclarations map[string]interface{}
 }
 
+func (t *AST) AddMuFunction() error {
+	muFunction := &FunctionNode{Name: "Mu", Entry: false, Body: []*SentenceNode{}}
+	// TODO: add stdlib functions
+	// TODO: need exclude go funcs?(GO and Go)
+
+	argPatternVar := &VarPatternNode{
+		Type: ExprVarType,
+		Name: "Arg",
+	}
+
+	functionCallTmp := FunctionCallResultNode{
+		Args: []ResultNode{
+			argPatternVar.ToResultNode(),
+		},
+	}
+	for _, f := range t.Functions {
+		functionCall := functionCallTmp
+		functionCall.Ident = f.Name
+		muFunction.Body = append(muFunction.Body, &SentenceNode{
+			Lhs: []PatternNode{
+				&WordPatternNode{Value: f.Name},
+				argPatternVar,
+			},
+
+			Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+		},
+			&SentenceNode{
+				Lhs: []PatternNode{
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&CharactersPatternNode{Value: []byte(f.Name)},
+						},
+					},
+					argPatternVar,
+				},
+				Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+			},
+		)
+	}
+
+	for f := range t.ExternalDeclarations {
+		functionCall := functionCallTmp
+		functionCall.Ident = f
+		muFunction.Body = append(muFunction.Body, &SentenceNode{
+			Lhs: []PatternNode{
+				&WordPatternNode{Value: f},
+				argPatternVar,
+			},
+
+			Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+		},
+			&SentenceNode{
+				Lhs: []PatternNode{
+					&GroupedPatternNode{
+						Patterns: []PatternNode{
+							&CharactersPatternNode{Value: []byte(f)},
+						},
+					},
+					argPatternVar,
+				},
+				Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+			},
+		)
+	}
+
+	t.Functions = append(t.Functions, muFunction)
+
+	return nil
+}
+
 func (t *AST) RebuildBlockSentences() {
 	i := 0
 
-	for ;i < len(t.Functions); i++ {
+	for ; i < len(t.Functions); i++ {
 		function := t.Functions[i]
 		for idx, sentence := range function.Body {
 			if sentence.Rhs.GetSentenceRhsType() != SentenceRhsBlockType {
@@ -770,3 +840,97 @@ func (t *AST) ExtractVariables(
 	return result
 }
 
+func (t *AST) collectVariables(p []PatternNode) map[string]interface{} {
+	variables := map[string]interface{}{}
+	queue := p
+
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+
+		if curr.GetPatternType() == VarPatternType {
+			variable := curr.(*VarPatternNode)
+			variables[fmt.Sprintf("%s.%s", variable.GetVarTypeStr(), variable.Name)] = struct{}{}
+
+		} else if curr.GetPatternType() == GroupedPatternType {
+			grouped := curr.(*GroupedPatternNode)
+			queue = append(queue, grouped.Patterns...)
+		}
+	}
+
+	return variables
+}
+
+func (t *AST) checkResultVarUsage(result []ResultNode, variables map[string]interface{}) []error {
+	errors := []error{}
+	queue := result
+
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+
+		if curr.GetResultType() == VarResultType {
+			variable := curr.(*VarResultNode)
+			ident := fmt.Sprintf("%s.%s", variable.GetVarTypeStr(), variable.Name)
+			if _, ok := variables[ident]; !ok {
+				errors = append(errors, fmt.Errorf("Variable %s not found", ident))
+			}
+		} else if curr.GetResultType() == GroupedResultType {
+			grouped := curr.(*GroupedResultNode)
+			queue = append(queue, grouped.Results...)
+		} else if curr.GetResultType() == FunctionCallResultType {
+			call := curr.(*FunctionCallResultNode)
+			queue = append(queue, call.Args...)
+		}
+	}
+
+	return errors
+}
+
+func (t *AST) checkSentenceVarUsage(
+	sentence *SentenceNode,
+	variables map[string]interface{},
+) []error {
+	errors := []error{}
+
+	lhsVariables := t.collectVariables(sentence.Lhs)
+
+	for v := range lhsVariables {
+		variables[v] = struct{}{}
+	}
+
+	for _, condition := range sentence.Condtitions {
+		conditionVariables := t.collectVariables(condition.Pattern)
+
+		for v := range conditionVariables {
+			variables[v] = struct{}{}
+		}
+
+		condErrors := t.checkResultVarUsage(condition.Result, variables)
+		errors = append(errors, condErrors...)
+	}
+
+	if sentence.Rhs.GetSentenceRhsType() == SentenceRhsResultType {
+		sentenceRhs := sentence.Rhs.(*SentenceRhsResultNode)
+		errors = append(errors, t.checkResultVarUsage(sentenceRhs.Result, variables)...)
+	} else {
+		sentenceRhs := sentence.Rhs.(*SentenceRhsBlockNode)
+		errors = append(errors, t.checkResultVarUsage(sentenceRhs.Result, variables)...)
+
+		for _, sentence := range sentenceRhs.Body {
+			errors = append(errors, t.checkSentenceVarUsage(sentence, variables)...)
+		}
+	}
+
+	return errors
+}
+
+func (t *AST) CheckVariableUsage() []error {
+	errors := []error{}
+	for _, f := range t.Functions {
+		for _, sentence := range f.Body {
+			errors = append(errors, t.checkSentenceVarUsage(sentence, map[string]interface{}{})...)
+		}
+	}
+	return errors
+}
