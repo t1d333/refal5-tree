@@ -66,24 +66,53 @@ func TestRopeGetMethod(t *testing.T) {
 }
 
 func TestRopeSetMethod(t *testing.T) {
-	
 }
 
 func TestRopeConcatWithoutRebalance(t *testing.T) {
-	
 }
 
-func TestRopeBalance(t *testing.T) {
-	expectedFirst :=&R5NodeChar{Char: 'a'}
-	expectedSecond := &R5NodeNumber{Number: 5}
-	expectedThird := &R5NodeString{String: "s"}
-	expectedFourth := &R5NodeChar{Char: 'b'}
-	expectedBalancedHeight := 2
+func TestRopeBalanceFibonacciFactor(t *testing.T) {
+	expectedBalancedHeight := 3
 
-	r1 := NewRope([]R5Node{expectedFirst})
-	r2 := NewRope([]R5Node{expectedSecond})
-	r3 := NewRope([]R5Node{expectedThird})
-	r4 := NewRope([]R5Node{expectedFourth})
+	r1 := NewRope([]R5Node{&R5NodeChar{Char: 'a'}})
+	r2 := NewRope([]R5Node{&R5NodeNumber{Number: 5}})
+	r3 := NewRope([]R5Node{&R5NodeString{String: "s"}})
+	r4 := NewRope([]R5Node{&R5NodeChar{Char: 'b'}, &R5NodeChar{Char: 'c'}})
+	r5 := NewRope([]R5Node{&R5NodeChar{Char: 'd'}})
+
+	tmp := r1.Concat(r2)
+	assert.NotNil(t, tmp)
+
+	tmp = tmp.Concat(r3)
+	assert.NotNil(t, tmp)
+
+	tmp = tmp.Concat(r4)
+	assert.NotNil(t, tmp)
+
+	tmp = tmp.Concat(r5)
+	assert.NotNil(t, tmp)
+	
+	assert.False(t, tmp.IsBalanced())
+
+	balanced := tmp.Balance()
+
+	assert.True(t, balanced.IsBalanced())
+	assert.Equal(t, tmp.Len(), balanced.Len())
+	assert.Equal(t, expectedBalancedHeight, balanced.Height())
+
+	for i := 0; i < tmp.Len(); i++ {
+		assert.Equal(t, tmp.Get(i), balanced.Get(i))
+	}
+}
+
+
+func TestRopeBalanceFibonacciFactor2(t *testing.T) {
+	expectedBalancedHeight := 2 
+
+	r1 := NewRope([]R5Node{&R5NodeChar{Char: 'a'}})
+	r2 := NewRope([]R5Node{&R5NodeNumber{Number: 5}})
+	r3 := NewRope([]R5Node{&R5NodeString{String: "s"}})
+	r4 := NewRope([]R5Node{&R5NodeChar{Char: 'b'}})
 
 	tmp := r1.Concat(r2)
 	assert.NotNil(t, tmp)
@@ -97,16 +126,46 @@ func TestRopeBalance(t *testing.T) {
 	assert.False(t, tmp.IsBalanced())
 
 	balanced := tmp.Balance()
-	
+
 	assert.True(t, balanced.IsBalanced())
 	assert.Equal(t, tmp.Len(), balanced.Len())
 	assert.Equal(t, expectedBalancedHeight, balanced.Height())
-	assert.Equal(t, expectedFirst, balanced.Get(0))
-	assert.Equal(t, expectedSecond, balanced.Get(1))
-	assert.Equal(t, expectedThird, balanced.Get(2))
-	assert.Equal(t, expectedFourth, balanced.Get(3))
+
+	for i := 0; i < tmp.Len(); i++ {
+		assert.Equal(t, tmp.Get(i), balanced.Get(i))
+	}
+}
+
+
+func TestRopeBalanceAVLFactor(t *testing.T) {
+	expectedBalancedHeight := 2 
+
+	r1 := NewRope([]R5Node{&R5NodeString{String: "a"}})
+	r2 := NewRope([]R5Node{&R5NodeString{String: "b"}})
+	r3 := NewRope([]R5Node{&R5NodeString{String: "c"}})
+	r4 := NewRope([]R5Node{&R5NodeString{String: "d"}})
+
+	tmp := r1.Concat(r2)
+	assert.NotNil(t, tmp)
+
+	tmp = tmp.Concat(r3)
+	assert.NotNil(t, tmp)
+
+	tmp = tmp.Concat(r4)
+	assert.NotNil(t, tmp)
+
+	assert.False(t, tmp.IsAVLBalanced())
+
+	balanced := tmp.balanceAVL()
+
+	assert.True(t, balanced.IsAVLBalanced())
+	assert.Equal(t, tmp.Len(), balanced.Len())
+	assert.Equal(t, expectedBalancedHeight, balanced.Height())
+
+	for i := 0; i < tmp.Len(); i++ {
+		assert.Equal(t, tmp.Get(i), balanced.Get(i))
+	}
 }
 
 func TestRopeConcatWithRebalance(t *testing.T) {
-	
 }
