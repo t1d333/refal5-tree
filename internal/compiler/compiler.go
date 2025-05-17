@@ -10,7 +10,9 @@ import (
 
 	"github.com/t1d333/refal5-tree/internal/ast"
 	"github.com/t1d333/refal5-tree/internal/parser"
+	"github.com/t1d333/refal5-tree/internal/library"
 )
+
 
 // Templates
 
@@ -20,7 +22,7 @@ package main
 
 import (
 	"github.com/t1d333/refal5-tree/pkg/runtime"
-	// "fmt"
+	"github.com/t1d333/refal5-tree/pkg/library"
 )
 
 var (
@@ -254,7 +256,7 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 	}
 
 	progName, _ := strings.CutSuffix(files[0], ".ref")
-	progName +=".go"
+	progName += ".go"
 
 	os.WriteFile(progName, []byte(result), 0644)
 }
@@ -312,8 +314,7 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 	}
 
 	buff := &bytes.Buffer{}
-	
-	
+
 	c.compiledProgramTmpl.Execute(buff,
 		CompiledProgram{
 			GoFunctionName: goFunc.Name,
@@ -898,14 +899,25 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 			"result = runtime.NewRope([]runtime.R5Node{})\n",
 		}
 
-		fCmds = append(
-			fCmds,
-			fmt.Sprintf(
-				"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Name: \"%s\", Ptr: r5t%s_}, localViewField)\n",
-				fNode.Ident,
-				fNode.Ident,
-			),
-		)
+		if _, ok := library.LibraryFunctions[fNode.Ident]; ok {
+			fCmds = append(
+				fCmds,
+				fmt.Sprintf(
+					"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Name: \"%s\", Ptr: library.R5t%s}, localViewField)\n",
+					fNode.Ident,
+					fNode.Ident,
+				),
+			)
+		} else {
+			fCmds = append(
+				fCmds,
+				fmt.Sprintf(
+					"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Name: \"%s\", Ptr: r5t%s_}, localViewField)\n",
+					fNode.Ident,
+					fNode.Ident,
+				),
+			)
+		}
 
 		for _, arg := range fNode.Args {
 			fCmds = append(fCmds, c.buildResultCmds(arg, varsToIdxs)...)

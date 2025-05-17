@@ -4,8 +4,10 @@ import (
 	"fmt"
 )
 
-type RopeNodeType int
-type RopeBalanceFactor int
+type (
+	RopeNodeType      int
+	RopeBalanceFactor int
+)
 
 const (
 	RopeBalanceFactorFibonacci = iota
@@ -108,12 +110,12 @@ func (r *Rope) rotateLeft(node RopeNode) RopeNode {
 
 	x := node.(*RopeNodeInner)
 	y := x.Right
-	
+
 	if inner, ok := y.(*RopeNodeInner); ok {
 		x.Right = inner.Left
 		inner.Left = x
 	}
-	
+
 	r.updateAVLBalanceInfo(x)
 	r.updateAVLBalanceInfo(y)
 
@@ -198,9 +200,9 @@ func (r *Rope) balanceAVL() *Rope {
 
 	if balanceFactor == 2 {
 
-		if right, ok := root.Right.(*RopeNodeInner); ok{
+		if right, ok := root.Right.(*RopeNodeInner); ok {
 			tmp := *right
-			if  r.balanceFactorAVL(&tmp) < 0 {
+			if r.balanceFactorAVL(&tmp) < 0 {
 				root.Right = r.rotateRight(&tmp)
 			}
 		}
@@ -219,7 +221,7 @@ func (r *Rope) balanceAVL() *Rope {
 				root.Left = r.rotateLeft(leftTmp)
 			}
 		}
-		
+
 		root := r.rotateRight(&root)
 		return &Rope{
 			root:         root,
@@ -443,70 +445,107 @@ func (r *Rope) Set(i int, data R5Node) {
 }
 
 func (r *Rope) Split(i int) (*Rope, *Rope) {
-	if i < 0 || i > r.Len() {
+	left, right := r.splitRec(r.root, i)
+	return &Rope{
+			root:         left,
+			fibGenerator: r.fibGenerator,
+		}, &Rope{
+			root:         right,
+			fibGenerator: r.fibGenerator,
+		}
+}
+
+func (r *Rope) splitRec(n RopeNode, i int) (RopeNode, RopeNode) {
+	if n == nil {
 		return nil, nil
 	}
 
-	path := []RopeNode{}
-	curr := r.root
+	if n.NodeType() == RopeNodeLeafType {
 
-	for {
-		switch curr.NodeType() {
-		case RopeNodeInnerType:
-			path = append(path, curr)
-			inner := curr.(*RopeNodeInner)
-			if inner.Left != nil && inner.Left.GetWeight() > i {
-				curr = inner.Left
-			} else {
-				curr = inner.Right
-				if inner.Left != nil {
-					i -= inner.Left.GetWeight()
-				}
-			}
-		case RopeNodeLeafType:
-			leaf := curr.(*RopeNodeLeaf)
-			var prevLhsNode RopeNode = &RopeNodeLeaf{
-				Data: leaf.Data[:i],
-			}
-			var prevRhsNode RopeNode = &RopeNodeLeaf{
-				Data: leaf.Data[i:],
-			}
-
-			for i := len(path) - 1; i >= 0; i -= 1 {
-				currParent := path[i].(*RopeNodeInner)
-
-				newLhs := &RopeNodeInner{
-					Weight: prevLhsNode.GetWeight(),
-					Left:   nil,
-					Right:  prevLhsNode,
-				}
-
-				if currParent.Left != nil && currParent.Left != curr {
-					newLhs.Weight += currParent.Left.GetWeight()
-					newLhs.Left = currParent.Left
-				}
-
-				newRhs := &RopeNodeInner{
-					Weight: prevRhsNode.GetWeight(),
-					Left:   prevRhsNode,
-					Right:  nil,
-				}
-
-				if currParent.Right != nil && currParent.Right != curr {
-					newRhs.Right = currParent.Right
-					newRhs.Weight += currParent.Right.GetWeight()
-				}
-
-				prevLhsNode = newLhs
-				prevRhsNode = newRhs
-			}
-
-			return &Rope{
-				root: prevLhsNode,
-			}, &Rope{root: prevRhsNode}
+		leaf := n.(*RopeNodeLeaf)
+		
+		if i <= 0 {
+			return &RopeNodeLeaf{} , &RopeNodeLeaf{leaf.Data}
 		}
+
+		if i >= leaf.GetWeight() {
+			return &RopeNodeLeaf{leaf.Data}, &RopeNodeLeaf{}
+		}
+
+		left := &RopeNodeLeaf{leaf.Data[i:]}
+		right := &RopeNodeLeaf{leaf.Data[:i]}
+		return left, right
+
 	}
+
+	inner := n.(*RopeNodeInner)
+
+	if inner.Left != nil && inner.Left.GetWeight() > i {
+		l1, l2 := r.splitRec(inner.Left, i)
+		right := &RopeNodeInner{
+			Weight: l2.GetWeight(),
+			Height: l2.GetHeight() + 1,
+			Left:   l2,
+			Right:  inner.Right,
+		}
+
+		if inner.Right != nil {
+			right.Weight += inner.Right.GetWeight()
+			right.Height = max(inner.Right.GetHeight(), l2.GetHeight()) + 1
+		}
+
+		return l1, right
+	}
+
+	if inner.Left != nil {
+		i -= inner.Left.GetWeight()
+	}
+
+	r1, r2 := r.splitRec(inner.Right, i)
+	left := &RopeNodeInner{
+		Weight: r1.GetWeight(),
+		Height: r1.GetHeight() + 1,
+		Left:   inner.Left,
+		Right:  r1,
+	}
+
+	if inner.Left != nil {
+		left.Weight += inner.Left.GetWeight()
+		left.Height = max(inner.Left.GetHeight(), r1.GetHeight()) + 1
+	}
+
+	return left, r2
 }
+
+// func Split(n *RopeNode, i int) (*RopeNode, *RopeNode) {
+//     if n == nil {
+//         return nil, nil
+//     }
+//
+//     if isLeaf(n) {
+//         if i <= 0 {
+//             return nil, n
+//         } else if i >= len(n.value) {
+//             return n, nil
+//         } else {
+//             left := &RopeNode{value: n.value[:i]}
+//             right := &RopeNode{value: n.value[i:]}
+//             return left, right
+//         }
+//     }
+//
+//     if i < n.weight {
+//         // Идём влево
+//         l1, l2 := Split(n.left, i)
+//         right := makeNode(l2, n.right)
+//         return l1, right
+//     } else {
+//         // Идём вправо
+//         r1, r2 := Split(n.right, i-n.weight)
+//         left := makeNode(n.left, r1)
+//         return left, r2
+//     }
+// }
 
 func (r *Rope) Insert(i int, data []R5Node) *Rope {
 	if i < 0 || i > r.Len() {

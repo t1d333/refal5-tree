@@ -7,6 +7,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/t1d333/refal5-tree/internal/ast"
+	"github.com/t1d333/refal5-tree/internal/library"
 	"github.com/t1d333/refal5-tree/internal/tree_sitter_refal5"
 )
 
@@ -120,7 +121,6 @@ func (p *TreeSitterRefal5Parser) Parse(source []byte) (*ast.AST, []error) {
 		return nil, errors
 	}
 
-	result.AddMuFunction()
 	result.RebuildBlockSentences()
 
 	return result, errors
@@ -441,8 +441,7 @@ func (p *TreeSitterRefal5Parser) ParseFiles(
 		return nil, nil, errors
 	}
 
-	globalFuncMapping := map[string]*ast.FunctionNode{}
-	// localFuncMapping := make([]map[string]*ast.FunctionNode, len(progs))
+	entryFuncMapping := map[string]*ast.FunctionNode{}
 	funcToSourceMapping := map[string]int{}
 	newFuncMapping := map[string]*ast.FunctionNode{}
 
@@ -460,28 +459,45 @@ func (p *TreeSitterRefal5Parser) ParseFiles(
 					errors[j] = append(errors[j], err)
 				} else {
 					funcToSourceMapping[name] = idx
-					globalFuncMapping[name] = function
+					entryFuncMapping[name] = function
 				}
 			}
 		}
 	}
 
 	for idx := range trees {
+		trees[idx].AddMuFunction(funcToSourceMapping, idx)
+		muFunc := trees[idx].Functions[len(trees[idx].Functions)-1]
+		muMapping := map[string]*ast.FunctionNode{}
+		muMapping["Mu"] = muFunc
+		newFuncMapping[fmt.Sprintf("Mu%d", idx)] = muFunc
+
+		p.UpdateFunctionsCallsForManyFilesCompilation(
+			muMapping,
+			map[string]*ast.FunctionNode{},
+			trees[idx],
+			false,
+			false,
+		)
+	}
+
+	for idx := range trees {
 		fileErrors := p.UpdateFunctionsCallsForManyFilesCompilation(
-			globalFuncMapping,
+			entryFuncMapping,
 			newFuncMapping,
 			trees[idx],
 			true,
 			true,
 		)
+
 		foundErrors = len(fileErrors) > 0 || foundErrors
 		errors[idx] = append(errors[idx], fileErrors...)
 	}
 
-	if f, ok := globalFuncMapping["GO"]; ok {
+	if f, ok := entryFuncMapping["GO"]; ok {
 		goFunctPtr = f
 	} else {
-		goFunctPtr = globalFuncMapping["Go"]
+		goFunctPtr = entryFuncMapping["Go"]
 	}
 
 	return trees, goFunctPtr, errors
@@ -582,6 +598,9 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 				functionCall.Ident = function.Name
 			}
 		} else if _, ok := newToOldFuncMapping[functionCall.Ident]; !ok && triggerUndefinedCalls {
+			if _, ok := library.LibraryFunctions[functionCall.Ident]; ok && triggerUndefinedCalls {
+				continue
+			}
 			errors = append(errors, fmt.Errorf("Function %s is not defined", functionCall.Ident))
 		}
 	}

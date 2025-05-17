@@ -20,3 +20,10 @@ $(BUILD_DIR):
 .PHONY: clean
 clean:
 	rm -rf build
+
+.PHONY: autotests
+autotests: build
+	cd autotests && bash run.sh
+	
+	
+	

@@ -1,0 +1,28 @@
+$EXTERN SatMu, SatEntry2; /* SatEntry1 не подключаем! */
+
+$ENTRY GO {
+  /* пусто */
+    = <Eq <Mu Local> "Main Local">
+      <Eq <Mu <Implode 'Local'>> "Main Local">
+      <Eq <Mu Entry> "Main Entry">
+      <Eq <Mu Override> "Main Override">
+      <Eq <Mu SatEntry2> "Satellite Entry 2">
+      <Eq <SatMu Local> "Satellite Local">
+      <Eq <SatMu SatEntry1> "Satellite Entry 1">
+      <Eq <SatMu SatEntry2> "Satellite Entry 2">
+      <Eq <SatMu Entry> "Main Entry">
+      <Eq <SatMu Override> "Satellite Override">
+      <Eq <SatMu <Implode 'MainEntry'>> "Main MainEntry">
+      <Eq <Mu ('Local')> "Main Local">
+      <Eq <SatMu ('Local')> "Satellite Local">
+*      <Eq <Mu ('Add') 10 20> 30>
+*      <Eq <Mu ('+') 10 20> 30>
+}
+
+Eq { s.X s.X = }
+
+Local { = "Main Local" }
+
+$ENTRY Entry { = "Main Entry" }
+$ENTRY Override { = "Main Override" }
+$ENTRY MainEntry { = "Main MainEntry" }

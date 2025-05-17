@@ -2,6 +2,10 @@ package ast
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/t1d333/refal5-tree/internal/library"
 )
 
 type ConditionHelpTemplateType int
@@ -22,8 +26,12 @@ type AST struct {
 	ExternalDeclarations map[string]interface{}
 }
 
-func (t *AST) AddMuFunction() error {
-	muFunction := &FunctionNode{Name: "Mu", Entry: false, Body: []*SentenceNode{}}
+func (t *AST) AddMuFunction(entryFunctions map[string]int, target int) error {
+	muFunction := &FunctionNode{
+		Name:  fmt.Sprintf("Mu%d", target),
+		Entry: false,
+		Body:  []*SentenceNode{},
+	}
 	// TODO: add stdlib functions
 	// TODO: need exclude go funcs?(GO and Go)
 
@@ -37,37 +45,47 @@ func (t *AST) AddMuFunction() error {
 			argPatternVar.ToResultNode(),
 		},
 	}
-	for _, f := range t.Functions {
-		functionCall := functionCallTmp
-		functionCall.Ident = f.Name
-		muFunction.Body = append(muFunction.Body, &SentenceNode{
-			Lhs: []PatternNode{
-				&WordPatternNode{Value: f.Name},
-				argPatternVar,
-			},
 
-			Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
-		},
-			&SentenceNode{
-				Lhs: []PatternNode{
-					&GroupedPatternNode{
-						Patterns: []PatternNode{
-							&CharactersPatternNode{Value: []byte(f.Name)},
-						},
-					},
-					argPatternVar,
-				},
-				Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
-			},
-		)
+	allFunctions := []string{}
+
+	for _, f := range t.Functions {
+		allFunctions = append(allFunctions, f.Name)
+	}
+	//
+	// for f := range t.ExternalDeclarations {
+	// 	allFunctions = append(allFunctions, f)
+	// }
+
+	for f, i := range entryFunctions {
+		if i == target {
+			continue
+		}
+		allFunctions = append(allFunctions, f)
 	}
 
-	for f := range t.ExternalDeclarations {
+	for f := range library.LibraryFunctions {
+		allFunctions = append(allFunctions, f)
+	}
+
+	for i, f := range allFunctions {
+		callName := f
+		ident := f
+		if i < len(t.Functions) {
+			ident, _ = strings.CutSuffix(f, strconv.Itoa(target))
+		}
+
+		if srcIdx, ok := entryFunctions[f]; ok && srcIdx != target {
+			ident, _ = strings.CutSuffix(f, strconv.Itoa(srcIdx))
+			targetIdx := entryFunctions[f]
+			callName = fmt.Sprintf("%s%d", f, targetIdx)
+		}
+
+		allFunctions = append(allFunctions, f)
 		functionCall := functionCallTmp
-		functionCall.Ident = f
+		functionCall.Ident = callName
 		muFunction.Body = append(muFunction.Body, &SentenceNode{
 			Lhs: []PatternNode{
-				&WordPatternNode{Value: f},
+				&WordPatternNode{Value: ident},
 				argPatternVar,
 			},
 
@@ -77,7 +95,7 @@ func (t *AST) AddMuFunction() error {
 				Lhs: []PatternNode{
 					&GroupedPatternNode{
 						Patterns: []PatternNode{
-							&CharactersPatternNode{Value: []byte(f)},
+							&CharactersPatternNode{Value: []byte(ident)},
 						},
 					},
 					argPatternVar,
