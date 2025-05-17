@@ -3,7 +3,7 @@ all: lint build
 
 BUILD_DIR = ./build
 SRC_PATH = ./cmd/app/main.go
-COMPILER_BIN = refal5-tree
+COMPILER_BIN = refal5t
 
 
 .PHONY: lint

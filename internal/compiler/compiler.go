@@ -1,11 +1,11 @@
 package compiler
 
 import (
-	// "bytes"
 	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/t1d333/refal5-tree/internal/ast"
@@ -38,7 +38,7 @@ var viewField []runtime.ViewFieldNode
 func main() {
 
 	gofunc := &runtime.R5Function{
-		Name:	 "GO", 
+		Name:	 "GO",
 		Entry: true,
 		Ptr:   GoFuncPtr,
 	}
@@ -68,7 +68,7 @@ func r5t{{.Name}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFie
     {{ $cmd }}
 {{- end}}
 		{{ if not .NeedLoopReturn }}
-			result := runtime.NewRope([]runtime.R5Node{}) 
+			result := runtime.NewRope([]runtime.R5Node{})
 			localViewField := &[]runtime.ViewFieldNode{}
 			{{ range $cmd := .BuildResultCmds }}
 				{{ $cmd }}
@@ -98,14 +98,14 @@ if (!runtime.R5t{{.NodeType}}(p[{{.LeftBorder}}], p[{{.RightBorder}}], arg)) {
 	{{ end }}
 {{ end }}`
 	openExprVarLoopMatchCommandTmplString = `
-p[{{ .Idx }}] = p[{{ .Left }}] + 1 
+p[{{ .Idx }}] = p[{{ .Left }}] + 1
 p[{{ .Idx }} + 1] = p[{{ .Left }}]
 for end := true; end; end = runtime.R5tOpenEvarAdvance({{ .Idx }}, p[{{ .Right }}], arg, p) {
 	{{ range $cmd := .Cmds }}
 		{{ $cmd }}
 	{{ end }}	
 	{{ if .NeedReturn }}
-		result := runtime.NewRope([]runtime.R5Node{}) 
+		result := runtime.NewRope([]runtime.R5Node{})
 		localViewField := &[]runtime.ViewFieldNode{}
 		{{ range $cmd := .BuildResultCmds }}
 			{{ $cmd }}
@@ -248,7 +248,15 @@ func (c *Compiler) Compile(files []string, options CompilerOptions) {
 		return
 	}
 
-	c.Generate(trees, goFunc)
+	result, err := c.Generate(trees, goFunc)
+	if err != nil {
+		// TODO: check error
+	}
+
+	progName, _ := strings.CutSuffix(files[0], ".ref")
+	progName +=".go"
+
+	os.WriteFile(progName, []byte(result), 0644)
 }
 
 func (c *Compiler) readFile(path string) ([]byte, error) {
@@ -303,15 +311,17 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 		}
 	}
 
-	c.compiledProgramTmpl.Execute(os.Stdout,
+	buff := &bytes.Buffer{}
+	
+	
+	c.compiledProgramTmpl.Execute(buff,
 		CompiledProgram{
 			GoFunctionName: goFunc.Name,
 			Functions:      functions,
 		},
 	)
 
-	// mainTmpl.Execute(os.Stdout, compiledProgram{Functions: generatedFunctions})
-	return "", nil
+	return buff.String(), nil
 }
 
 func (c *Compiler) GenerateFunctionBodyCode(

@@ -2,11 +2,15 @@ package runtime
 
 import (
 	"fmt"
-	// "math"
-	// "slices"
 )
 
 type RopeNodeType int
+type RopeBalanceFactor int
+
+const (
+	RopeBalanceFactorFibonacci = iota
+	RopeBalanceFactorAVL
+)
 
 const (
 	RopeNodeInnerType = iota
@@ -77,7 +81,6 @@ func (r *Rope) IsBalanced() bool {
 
 func (r *Rope) IsAVLBalanced() bool {
 	factor := r.balanceFactorAVL(r.root)
-	fmt.Println("Factor: ", factor)
 	return factor < 2 && factor > -2
 }
 
@@ -104,11 +107,13 @@ func (r *Rope) rotateLeft(node RopeNode) RopeNode {
 	}
 
 	x := node.(*RopeNodeInner)
-	y := x.Left
+	y := x.Right
+	
 	if inner, ok := y.(*RopeNodeInner); ok {
 		x.Right = inner.Left
 		inner.Left = x
 	}
+	
 	r.updateAVLBalanceInfo(x)
 	r.updateAVLBalanceInfo(y)
 
@@ -123,15 +128,13 @@ func (r *Rope) rotateRight(node RopeNode) RopeNode {
 	y := node.(*RopeNodeInner)
 	x := y.Left
 
-	if x.NodeType() == RopeNodeInnerType {
-		inner := x.(*RopeNodeInner)
+	if inner, ok := x.(*RopeNodeInner); ok {
+		y.Left = inner.Right
 		inner.Right = y
 	}
 
 	r.updateAVLBalanceInfo(y)
 	r.updateAVLBalanceInfo(x)
-	fmt.Printf("%#v\n", x)
-	fmt.Printf("%#v\n", y)
 
 	return x
 }
@@ -191,29 +194,35 @@ func (r *Rope) balanceAVL() *Rope {
 		return r
 	}
 
-	root := r.root.(*RopeNodeInner)
-	fmt.Println("Root factor: ", balanceFactor)
+	root := *r.root.(*RopeNodeInner)
 
 	if balanceFactor == 2 {
 
-		if r.balanceFactorAVL(root.Right) < 0 {
-			root.Right = r.rotateRight(root.Right)
+		if right, ok := root.Right.(*RopeNodeInner); ok{
+			tmp := *right
+			if  r.balanceFactorAVL(&tmp) < 0 {
+				root.Right = r.rotateRight(&tmp)
+			}
 		}
 		return &Rope{
-			root:         r.rotateLeft(root),
+			root:         r.rotateLeft(&root),
 			fibGenerator: r.fibGenerator,
 		}
 
 	}
 
 	if balanceFactor == -2 {
-
-		fmt.Println("Left Root factor: ", r.balanceFactorAVL(root.Left))
-		if r.balanceFactorAVL(root.Left) > 0 {
-			root.Left = r.rotateLeft(root.Left)
+		leftTmp := root.Left
+		if left, ok := root.Left.(*RopeNodeInner); ok {
+			tmp := *left
+			if r.balanceFactorAVL(&tmp) > 0 {
+				root.Left = r.rotateLeft(leftTmp)
+			}
 		}
+		
+		root := r.rotateRight(&root)
 		return &Rope{
-			root:         r.rotateRight(root),
+			root:         root,
 			fibGenerator: r.fibGenerator,
 		}
 
@@ -358,7 +367,7 @@ func (r *Rope) ConcatWithRebalance(other *Rope) *Rope {
 		return res
 	}
 
-	return res.balanceAVL()
+	return res.Balance()
 }
 
 func (r *Rope) Concat(other *Rope) *Rope {
