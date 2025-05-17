@@ -2,14 +2,23 @@ package runtime
 
 import (
 	"fmt"
-	"slices"
 )
 
 type RopeNodeType int
+type RopeBalanceFactor int
+
+const (
+	RopeBalanceFactorFibonacci = iota
+	RopeBalanceFactorAVL
+)
 
 const (
 	RopeNodeInnerType = iota
 	RopeNodeLeafType
+)
+
+const (
+	RopeLeafLengthMax = 10
 )
 
 type Rope struct {
@@ -70,6 +79,11 @@ func (r *Rope) IsBalanced() bool {
 	return r.root.GetWeight() >= required
 }
 
+func (r *Rope) IsAVLBalanced() bool {
+	factor := r.balanceFactorAVL(r.root)
+	return factor < 2 && factor > -2
+}
+
 func (r *Rope) findSlot(length int) int {
 	for i := 0; ; i++ {
 		if length >= r.fibGenerator(i) && length < r.fibGenerator(i+1) {
@@ -79,53 +93,205 @@ func (r *Rope) findSlot(length int) int {
 }
 
 func (r *Rope) Balance() *Rope {
-	leaves := r.traverseLeaves()
-	slots := map[int]*Rope{}
+	if r.IsBalanced() {
+		return r
+	}
 
-	for _, leaf := range leaves {
-		curr := NewRope(leaf.Data)
-		for {
-			slot := r.findSlot(curr.Len())
-			if existing, ok := slots[slot]; ok && existing != nil {
-				// Если в слоте уже есть дерево, объединяем его с текущим
-				curr = existing.Concat(curr)
-				delete(slots, slot)
-			} else {
-				slots[slot] = curr
-				break
+	leaves := r.traverseLeaves()
+	return r.mergeLeaves(leaves, 0, len(leaves))
+}
+
+func (r *Rope) rotateLeft(node RopeNode) RopeNode {
+	if node.NodeType() == RopeNodeLeafType {
+		return node
+	}
+
+	x := node.(*RopeNodeInner)
+	y := x.Right
+	
+	if inner, ok := y.(*RopeNodeInner); ok {
+		x.Right = inner.Left
+		inner.Left = x
+	}
+	
+	r.updateAVLBalanceInfo(x)
+	r.updateAVLBalanceInfo(y)
+
+	return y
+}
+
+func (r *Rope) rotateRight(node RopeNode) RopeNode {
+	if node.NodeType() == RopeNodeLeafType {
+		return node
+	}
+
+	y := node.(*RopeNodeInner)
+	x := y.Left
+
+	if inner, ok := x.(*RopeNodeInner); ok {
+		y.Left = inner.Right
+		inner.Right = y
+	}
+
+	r.updateAVLBalanceInfo(y)
+	r.updateAVLBalanceInfo(x)
+
+	return x
+}
+
+func (r *Rope) updateAVLBalanceInfo(x RopeNode) {
+	if x.NodeType() == RopeNodeLeafType {
+		return
+	}
+
+	inner := x.(*RopeNodeInner)
+
+	leftHeight := 0
+	rightHeight := 0
+
+	inner.Weight = 0
+
+	if inner.Left != nil {
+		leftHeight = inner.Left.GetHeight()
+		inner.Weight += inner.Left.GetWeight()
+	}
+
+	if inner.Right != nil {
+		rightHeight = inner.Right.GetHeight()
+		inner.Weight += inner.Right.GetWeight()
+	}
+
+	inner.Height = 1 + max(leftHeight, rightHeight)
+}
+
+func (r *Rope) balanceFactorAVL(node RopeNode) int {
+	if node.NodeType() == RopeNodeLeafType {
+		return 0
+	}
+
+	root := node.(*RopeNodeInner)
+
+	leftHeight := 0
+	rightHeight := 0
+
+	if root.Left != nil {
+		leftHeight = root.Left.GetHeight()
+	}
+
+	if root.Right != nil {
+		rightHeight = root.Right.GetHeight()
+	}
+
+	return rightHeight - leftHeight
+}
+
+func (r *Rope) balanceAVL() *Rope {
+	r.updateAVLBalanceInfo(r.root)
+
+	balanceFactor := r.balanceFactorAVL(r.root)
+
+	if balanceFactor < 2 && balanceFactor > -2 {
+		return r
+	}
+
+	root := *r.root.(*RopeNodeInner)
+
+	if balanceFactor == 2 {
+
+		if right, ok := root.Right.(*RopeNodeInner); ok{
+			tmp := *right
+			if  r.balanceFactorAVL(&tmp) < 0 {
+				root.Right = r.rotateRight(&tmp)
 			}
 		}
-
-	}
-
-	var result *Rope
-
-	slotsSlice := []*Rope{}
-	for _, r := range slots {
-		slotsSlice = append(slotsSlice, r)
-	}
-
-	slices.SortFunc(slotsSlice, func(lhs, rhs *Rope) int {
-		if lhs.Len() < rhs.Len() {
-			return -1
-		} else if lhs.Len() < rhs.Len() {
-			return 1
+		return &Rope{
+			root:         r.rotateLeft(&root),
+			fibGenerator: r.fibGenerator,
 		}
 
-		return 0
-	})
-
-	for i := 0; i < len(slotsSlice); i++ {
-		curr := slotsSlice[i]
-
-		if result == nil {
-			result = curr
-		} else {
-			result = result.Concat(curr)
-		}
 	}
 
-	return result
+	if balanceFactor == -2 {
+		leftTmp := root.Left
+		if left, ok := root.Left.(*RopeNodeInner); ok {
+			tmp := *left
+			if r.balanceFactorAVL(&tmp) > 0 {
+				root.Left = r.rotateLeft(leftTmp)
+			}
+		}
+		
+		root := r.rotateRight(&root)
+		return &Rope{
+			root:         root,
+			fibGenerator: r.fibGenerator,
+		}
+
+	}
+
+	return r
+}
+
+// function balance(node: RopeNode) -> RopeNode:
+//     update(node)
+//     if balanceFactor(node) == 2:
+//         if balanceFactor(node.right) < 0:
+//             node.right = rotateRight(node.right)
+//         return rotateLeft(node)
+//     if balanceFactor(node) == -2:
+//         if balanceFactor(node.left) > 0:
+//             node.left = rotateLeft(node.left)
+//         return rotateRight(node)
+//     return node
+
+// function update(node: RopeNode):
+//     node.height = 1 + max(height(node.left), height(node.right))
+//     node.weight = length(node.left)
+//
+// function balanceFactor(node: RopeNode) -> int:
+//     return height(node.right) - height(node.left)
+//
+// function rotateLeft(x: RopeNode) -> RopeNode:
+//     y = x.right
+//     x.right = y.left
+//     y.left = x
+//     update(x)
+//     update(y)
+//     return y
+//
+// function rotateRight(y: RopeNode) -> RopeNode:
+//     x = y.left
+//     y.left = x.right
+//     x.right = y
+//     update(y)
+//     update(x)
+//     return x
+//
+// function balance(node: RopeNode) -> RopeNode:
+//     update(node)
+//     if balanceFactor(node) == 2:
+//         if balanceFactor(node.right) < 0:
+//             node.right = rotateRight(node.right)
+//         return rotateLeft(node)
+//     if balanceFactor(node) == -2:
+//         if balanceFactor(node.left) > 0:
+//             node.left = rotateLeft(node.left)
+//         return rotateRight(node)
+//     return node
+
+func (r *Rope) mergeLeaves(leaves []*RopeNodeLeaf, start, end int) *Rope {
+	rng := end - start
+
+	if rng == 1 {
+		return NewRope(leaves[start].Data)
+	}
+
+	if rng == 2 {
+		return NewRope(leaves[start].Data).ConcatWithRebalance(NewRope(leaves[start+1].Data))
+	}
+
+	mid := start + (rng / 2)
+
+	return r.mergeLeaves(leaves, start, mid).ConcatWithRebalance(r.mergeLeaves(leaves, mid, end))
 }
 
 type RopeNode interface {
@@ -179,6 +345,14 @@ func NewRope(n []R5Node) *Rope {
 }
 
 func (r *Rope) ConcatWithRebalance(other *Rope) *Rope {
+	if other.Len() == 0 {
+		return r
+	}
+
+	if r.Len() == 0 {
+		return other
+	}
+
 	res := &Rope{
 		fibGenerator: r.fibGenerator,
 		root: &RopeNodeInner{
@@ -342,19 +516,17 @@ func (r *Rope) Insert(i int, data []R5Node) *Rope {
 	tmp := NewRope(data)
 
 	if i == 0 {
-		return tmp.Concat(r)
-		// r.root = tmp.root
-		// return
+		return tmp.ConcatWithRebalance(r)
 	}
 
 	if i == r.Len() {
-		result := r.Concat(tmp)
+		result := r.ConcatWithRebalance(tmp)
 		return result
 	}
 
 	tmpLhs, tmpRhs := r.Split(i)
-	tmp = tmpLhs.Concat(tmp)
-	return tmp.Concat(tmpRhs)
+	tmp = tmpLhs.ConcatWithRebalance(tmp)
+	return tmp.ConcatWithRebalance(tmpRhs)
 }
 
 func (r *Rope) Delete(i int) {
