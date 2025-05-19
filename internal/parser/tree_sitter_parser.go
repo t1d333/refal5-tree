@@ -163,6 +163,10 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			for i := 0; i < int(sentenceLhsNode.ChildCount()); i++ {
 				lhsPartNode := sentenceLhsNode.Child(i)
 
+				if lhsPartNode.IsExtra() {
+					continue
+				}
+
 				// TODO: check error
 				lhsPart, _ := p.walkPattern(lhsPartNode, source)
 				lhs = append(lhs, lhsPart)
@@ -200,7 +204,13 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 				if rhsNode.FieldNameForChild(i) != "expr" {
 					continue
 				}
+
 				resultNode := rhsNode.Child(i)
+
+				if resultNode.IsExtra() {
+					continue
+				}
+
 				tmp, _ := p.walkResult(resultNode, source)
 				astRhsNode.Result = append(astRhsNode.Result, tmp)
 			}
@@ -224,6 +234,11 @@ func (p *TreeSitterRefal5Parser) walkFunctionBody(
 			}
 			for i := 0; i < int(rhsNode.ChildCount()); i++ {
 				child := rhsNode.Child(i)
+
+				if child.IsExtra() {
+					continue
+				}
+
 				tmp, _ := p.walkResult(child, source)
 				astRhsNode.Result = append(astRhsNode.Result, tmp)
 			}
@@ -269,11 +284,12 @@ func (p *TreeSitterRefal5Parser) walkPattern(
 		pattern := &ast.GroupedPatternNode{Patterns: []ast.PatternNode{}}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			if !child.IsNamed() {
+			if !child.IsNamed() || child.IsExtra() {
 				continue
 			}
 
 			// TODO: check error
+
 			nestedPattern, _ := p.walkPattern(child, source)
 			pattern.Patterns = append(pattern.Patterns, nestedPattern)
 
@@ -320,7 +336,7 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		pattern := &ast.GroupedResultNode{Results: []ast.ResultNode{}}
 		for i := 0; i < int(node.ChildCount()); i++ {
 			child := node.Child(i)
-			if !child.IsNamed() {
+			if !child.IsNamed() || child.IsExtra() {
 				continue
 			}
 
@@ -345,6 +361,10 @@ func (p *TreeSitterRefal5Parser) walkResult(
 		for i := 0; i < int(node.ChildCount()); i++ {
 			if node.FieldNameForChild(i) == "param" {
 				child := node.Child(i)
+				if child.IsExtra() {
+					continue
+				}
+
 				arg, _ := p.walkResult(child, source)
 				functionCallNode.Args = append(functionCallNode.Args, arg)
 			}
@@ -367,6 +387,11 @@ func (p *TreeSitterRefal5Parser) walkCondition(
 
 	for i := 0; i < int(condition.ChildCount()); i++ {
 		conditionChild := condition.Child(i)
+
+		if conditionChild.IsExtra() {
+			continue
+		}
+
 		switch condition.FieldNameForChild(i) {
 		case "result":
 			result, err := p.walkResult(conditionChild, source)
@@ -601,6 +626,12 @@ func (p *TreeSitterRefal5Parser) UpdateFunctionsCallsForManyFilesCompilation(
 			if _, ok := library.LibraryFunctions[functionCall.Ident]; ok && triggerUndefinedCalls {
 				continue
 			}
+
+			if alias, ok := library.LibraryFuncionAliases[functionCall.Ident]; ok && triggerUndefinedCalls {
+				functionCall.Ident = alias
+				continue
+			}
+			
 			errors = append(errors, fmt.Errorf("Function %s is not defined", functionCall.Ident))
 		}
 	}

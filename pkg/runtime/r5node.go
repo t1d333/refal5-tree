@@ -32,7 +32,7 @@ func (n *R5NodeChar) Type() R5Datatag {
 	return R5DatatagChar
 }
 
-type R5Number uint
+type R5Number uint32
 
 type R5NodeNumber struct {
 	Number R5Number

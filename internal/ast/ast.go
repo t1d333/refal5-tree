@@ -80,9 +80,31 @@ func (t *AST) AddMuFunction(entryFunctions map[string]int, target int) error {
 			callName = fmt.Sprintf("%s%d", f, targetIdx)
 		}
 
-		allFunctions = append(allFunctions, f)
 		functionCall := functionCallTmp
 		functionCall.Ident = callName
+
+		if alias, ok := library.LibraryFuncionOriginToAlias[f]; ok {
+			muFunction.Body = append(muFunction.Body, &SentenceNode{
+				Lhs: []PatternNode{
+					&WordPatternNode{Value: alias},
+					argPatternVar,
+				},
+
+				Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+			},
+				&SentenceNode{
+					Lhs: []PatternNode{
+						&GroupedPatternNode{
+							Patterns: []PatternNode{
+								&CharactersPatternNode{Value: []byte(alias)},
+							},
+						},
+						argPatternVar,
+					},
+					Rhs: &SentenceRhsResultNode{Result: []ResultNode{&functionCall}},
+				},
+			)
+		}
 		muFunction.Body = append(muFunction.Body, &SentenceNode{
 			Lhs: []PatternNode{
 				&WordPatternNode{Value: ident},
@@ -104,6 +126,8 @@ func (t *AST) AddMuFunction(entryFunctions map[string]int, target int) error {
 			},
 		)
 	}
+
+	// add aliases
 
 	t.Functions = append(t.Functions, muFunction)
 
@@ -206,6 +230,7 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 	}
 
 	if len(openEvarList) == 0 {
+
 		lhsResults := []ResultNode{}
 		for _, n := range sentence.Lhs {
 			lhsResults = append(lhsResults, PatternToResult(n))
@@ -421,6 +446,20 @@ func (a *AST) BuildNextFunction(
 ) *FunctionNode {
 	targetVariable := openEvars[k]
 	// vars(Pat) | e.K → e.K_fix e.K_var
+	if originFunc.Name == "Evaluate0" {
+		for _, e := range openEvars {
+			fmt.Printf("OPENEVARS: %#v\n", e)
+			fmt.Printf("LAST : %#v\n", originSentence.Lhs[len(originSentence.Lhs)-1])
+		}
+
+		for _, e := range originSentence.Lhs {
+			fmt.Printf("LHS : %#v\n", e)
+		}
+
+		fmt.Printf("RHS : %#v\n", originSentence.Rhs)
+
+	}
+
 	replacementPatternVariables := []PatternNode{
 		&VarPatternNode{
 			Type: ExprVarType,
@@ -432,19 +471,23 @@ func (a *AST) BuildNextFunction(
 		},
 	}
 
-	for i, n := range lhsVariables {
+	lhsTmp := []PatternNode{}
+
+	for _, n := range lhsVariables {
 		varNode := n.(*VarPatternNode)
 		if varNode.Type == ExprVarType {
-			lhsVariables[i] = &GroupedPatternNode{
+			lhsTmp = append(lhsTmp, &GroupedPatternNode{
 				Patterns: []PatternNode{
 					n,
 				},
-			}
+			})
+		} else {
+			lhsTmp = append(lhsTmp, n)
 		}
 	}
 
 	replacedPatternVariables := ReplacePatternVariable(
-		lhsVariables,
+		lhsTmp,
 		targetVariable,
 		replacementPatternVariables,
 	)
@@ -452,6 +495,30 @@ func (a *AST) BuildNextFunction(
 	nextForwardIdent := fmt.Sprintf("%sForward%d", originFunc.Name, k+1)
 	if k+1 == len(openEvars) {
 		nextForwardIdent = fmt.Sprintf("%sCont", originFunc.Name)
+	}
+
+	if originFunc.Name == "Evaluate0" && k == 0 {
+		for _, a := range originSentence.Lhs {
+			fmt.Printf("%#v\n", a)
+		}
+
+		fmt.Printf("-------------------\n")
+		t := a.BuildConditionTemplate(
+			k,
+			T5TemplateType,
+			originSentence.Lhs,
+			openEvars,
+			map[string]interface{}{})
+
+		for _, a := range t {
+			fmt.Printf("%#v\n", a)
+			g, ok := a.(*GroupedPatternNode)
+			if ok {
+				for _, b := range g.Patterns {
+					fmt.Printf("%#v\n", b)
+				}
+			}
+		}
 	}
 
 	return &FunctionNode{
@@ -555,7 +622,7 @@ func (a *AST) BuildConditionTemplate(
 
 		if curr == nil {
 			if currEnd.GetPatternType() != VarPatternType {
-				curr = currStart
+				curr = currEnd
 				queue = queue[:len(queue)-1]
 				result = &resultRhs
 			} else {
@@ -886,6 +953,9 @@ func (t *AST) checkResultVarUsage(result []ResultNode, variables map[string]inte
 	for len(queue) > 0 {
 		curr := queue[0]
 		queue = queue[1:]
+		if curr == nil {
+			fmt.Println(curr)
+		}
 
 		if curr.GetResultType() == VarResultType {
 			variable := curr.(*VarResultNode)

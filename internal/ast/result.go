@@ -154,6 +154,9 @@ func ReplaceResultVariable(
 		} else if curr.GetResultType() == GroupedResultType {
 			grouped := curr.(*GroupedResultNode)
 			result = append(result, ReplaceResultVariable(grouped.Results, target, replacement)...)
+		} else if curr.GetResultType() == FunctionCallResultType {
+			callNode :=  curr.(*FunctionCallResultNode)
+			result = append(result, ReplaceResultVariable(callNode.Args, target, replacement)...)
 		} else {
 			result = append(result, curr)
 		}

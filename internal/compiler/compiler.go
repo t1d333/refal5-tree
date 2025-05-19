@@ -9,10 +9,9 @@ import (
 	"text/template"
 
 	"github.com/t1d333/refal5-tree/internal/ast"
-	"github.com/t1d333/refal5-tree/internal/parser"
 	"github.com/t1d333/refal5-tree/internal/library"
+	"github.com/t1d333/refal5-tree/internal/parser"
 )
-
 
 // Templates
 
@@ -366,6 +365,9 @@ func (c *Compiler) GenerateSentence(
 		Commands:       []string{},
 		NeedLoopReturn: false,
 	}
+	if f.Name == "Evaluate0" {
+		fmt.Println("GENERATE FOR FUNC: ", f.Name, sentenceIdx)
+	}
 
 	// TODO: build pattern matching
 
@@ -421,11 +423,14 @@ func (c *Compiler) GenerateSentence(
 				cmdArg.Side = LeftMatchCmdType
 				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[0])
 				cmd := c.generateMatchCmd(cmdArg)
+				charNodeCopy := *charNode
+				charNodeCopy.Value = make([]byte, len(charNode.Value)-1)
+				copy(charNodeCopy.Value, charNode.Value[1:])
 
-				charNode.Value = charNode.Value[1:]
+				patterns = patterns[1:]
 
-				if len(charNode.Value) == 0 {
-					patterns = patterns[1:]
+				if len(charNodeCopy.Value) > 0 {
+					patterns = append([]ast.PatternNode{&charNodeCopy}, patterns...)
 				}
 
 				borders = append([][]int{{nextBorder, right}}, borders...)
@@ -445,13 +450,17 @@ func (c *Compiler) GenerateSentence(
 			if charNode, ok := patterns[len(patterns)-1].(*ast.CharactersPatternNode); ok {
 				cmdArg.NodeType = CharMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[0])
+				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[len(charNode.Value)-1])
 				cmd := c.generateMatchCmd(cmdArg)
 
-				charNode.Value = charNode.Value[1:]
+				charNodeCopy := *charNode
+				charNodeCopy.Value = make([]byte, len(charNode.Value)-1)
+				copy(charNodeCopy.Value, charNode.Value[:len(charNode.Value)-1])
 
-				if len(charNode.Value) == 0 {
-					patterns = patterns[:len(patterns)-1]
+				patterns = patterns[:len(patterns)-1]
+
+				if len(charNodeCopy.Value) > 0 {
+					patterns = append(patterns, &charNodeCopy)
 				}
 
 				borders = append([][]int{{left, nextBorder}}, borders...)
@@ -662,7 +671,7 @@ func (c *Compiler) GenerateSentence(
 			}
 
 			if rightVarNode != nil {
-				if rightVarNode.Type == ast.SymbolVarType || leftVarNode.Type == ast.TermVarType {
+				if rightVarNode.Type == ast.SymbolVarType || rightVarNode.Type == ast.TermVarType {
 					needRight = true
 				} else if _, ok := compiledSentence.VarsToIdxs[fmt.Sprintf("%s.%s", rightVarNode.GetVarTypeStr(), rightVarNode.Name)]; ok {
 					needRight = true
@@ -820,6 +829,10 @@ func (c *Compiler) GenerateSentence(
 				} else {
 					// TODO: Open evar
 					// hole.pattern
+					if f.Name == "Evaluate0" {
+						fmt.Println(sentenceIdx, patterns)
+					}
+					
 					openEvars = append([]*ast.VarPatternNode{varNode}, openEvars...)
 					compiledSentence.NeedLoopReturn = true
 					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder}}
@@ -964,6 +977,9 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 			return []string{fmt.Sprintf("runtime.CopySymbolVar(p[%d], arg, result)", idxs[0][0])}
 		} else {
 			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
+			if len(idxs) == 0 {
+				fmt.Println(fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name))
+			}
 			return []string{
 				fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
 			}
