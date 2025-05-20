@@ -2,6 +2,7 @@ package runtime
 
 import (
 	// "fmt"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,33 +108,38 @@ func TestRopeBalanceFibonacciFactor(t *testing.T) {
 }
 
 func TestRopeBalanceFibonacciFactor2(t *testing.T) {
-	expectedBalancedHeight := 2
 
-	r1 := NewRope([]R5Node{&R5NodeChar{Char: 'a'}})
-	r2 := NewRope([]R5Node{&R5NodeNumber{Number: 5}})
-	r3 := NewRope([]R5Node{&R5NodeString{String: "s"}})
-	r4 := NewRope([]R5Node{&R5NodeChar{Char: 'b'}})
+	r1 := NewRope([]R5Node{&R5NodeChar{Char: '1'}})
+	r2 := NewRope([]R5Node{&R5NodeNumber{Number: 2}})
+	r3 := NewRope([]R5Node{&R5NodeString{String: "3"}})
+	r4 := NewRope([]R5Node{&R5NodeChar{Char: '4'}})
+	r5 := NewRope([]R5Node{&R5NodeChar{Char: '5'}})
+	r6 := NewRope([]R5Node{&R5NodeChar{Char: '6'}})
+	r7 := NewRope([]R5Node{&R5NodeChar{Char: '7'}})
+	r8 := NewRope([]R5Node{&R5NodeChar{Char: '8'}})
+	r9 := NewRope([]R5Node{&R5NodeChar{Char: '9'}})
+	r10 := NewRope([]R5Node{&R5NodeChar{Char: 'z'}})
+	r11 := NewRope([]R5Node{&R5NodeChar{Char: 'z'}})
 
-	tmp := r1.Concat(r2)
-	assert.NotNil(t, tmp)
+	tmp := r1.ConcatAVL(r2)
+	fmt.Println(tmp.IsAVLBalanced())
+	tmp = tmp.ConcatAVL(r3)
+	fmt.Println(tmp.IsAVLBalanced())
+	tmp = tmp.ConcatAVL(r4)
+	fmt.Println(tmp.IsAVLBalanced())
+	tmp = tmp.ConcatAVL(r5)
+	fmt.Println(tmp.IsAVLBalanced())
+	tmp = tmp.ConcatAVL(r6)
+	fmt.Println(tmp.IsAVLBalanced(), tmp.Height())
+	tmp = tmp.ConcatAVL(r7)
+	fmt.Println(tmp.IsAVLBalanced(), tmp.String(), tmp.Height())
+	tmp = tmp.ConcatAVL(r8)
+	tmp = tmp.ConcatAVL(r9)
+	tmp = tmp.ConcatAVL(r10)
+	tmp = tmp.ConcatAVL(r11)
+	fmt.Println(tmp.Height(), tmp.Len(), tmp.String(), tmp.IsAVLBalanced())
 
-	tmp = tmp.Concat(r3)
-	assert.NotNil(t, tmp)
-
-	tmp = tmp.Concat(r4)
-	assert.NotNil(t, tmp)
-
-	assert.False(t, tmp.IsBalanced())
-
-	balanced := tmp.Balance()
-
-	assert.True(t, balanced.IsBalanced())
-	assert.Equal(t, tmp.Len(), balanced.Len())
-	assert.Equal(t, expectedBalancedHeight, balanced.Height())
-
-	for i := 0; i < tmp.Len(); i++ {
-		assert.Equal(t, tmp.Get(i), balanced.Get(i))
-	}
+	assert.True(t, false)
 }
 
 // func TestRopeBalanceAVLFactor(t *testing.T) {

@@ -421,11 +421,18 @@ func (c *Compiler) GenerateSentence(
 			if charNode, ok := patterns[0].(*ast.CharactersPatternNode); ok {
 				cmdArg.NodeType = CharMatchCmdNodeType
 				cmdArg.Side = LeftMatchCmdType
-				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[0])
+
+				charLength := 1
+				if charNode.Value[0] == '\\' {
+					cmdArg.Value = fmt.Sprintf("'\\%c'", charNode.Value[1])
+					charLength = 2
+				} else {
+					cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[0])
+				}
 				cmd := c.generateMatchCmd(cmdArg)
 				charNodeCopy := *charNode
-				charNodeCopy.Value = make([]byte, len(charNode.Value)-1)
-				copy(charNodeCopy.Value, charNode.Value[1:])
+				charNodeCopy.Value = make([]byte, len(charNode.Value)-charLength)
+				copy(charNodeCopy.Value, charNode.Value[charLength:])
 
 				patterns = patterns[1:]
 
@@ -450,12 +457,19 @@ func (c *Compiler) GenerateSentence(
 			if charNode, ok := patterns[len(patterns)-1].(*ast.CharactersPatternNode); ok {
 				cmdArg.NodeType = CharMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[len(charNode.Value)-1])
+				charLength := 1
+
+				if charNode.Value[len(charNode.Value)-1] == '\\' {
+					cmdArg.Value = fmt.Sprintf("'\\%c'", charNode.Value[len(charNode.Value)-1])
+					charLength = 2
+				} else {
+					cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[len(charNode.Value)-1])
+				}
 				cmd := c.generateMatchCmd(cmdArg)
 
 				charNodeCopy := *charNode
-				charNodeCopy.Value = make([]byte, len(charNode.Value)-1)
-				copy(charNodeCopy.Value, charNode.Value[:len(charNode.Value)-1])
+				charNodeCopy.Value = make([]byte, len(charNode.Value)-charLength)
+				copy(charNodeCopy.Value, charNode.Value[:len(charNode.Value)-charLength])
 
 				patterns = patterns[:len(patterns)-1]
 
@@ -588,7 +602,7 @@ func (c *Compiler) GenerateSentence(
 			if wordNode, ok := patterns[len(patterns)-1].(*ast.WordPatternNode); ok {
 				cmdArg.NodeType = StringMatchCmdNodeType
 				cmdArg.Side = RightMatchCmdType
-				cmdArg.Value = fmt.Sprintf("%s", wordNode.Value)
+				cmdArg.Value = fmt.Sprintf("\"%s\"", wordNode.Value)
 
 				cmd := c.generateMatchCmd(cmdArg)
 
@@ -803,7 +817,6 @@ func (c *Compiler) GenerateSentence(
 					} else {
 						cmds = append(cmds, cmd)
 					}
-					// borders = append([][]int{{nextBorder + 1, right}}, borders...)
 					nextBorder += 2
 					continue
 				} else if len(patterns) == 0 {
@@ -827,12 +840,7 @@ func (c *Compiler) GenerateSentence(
 					nextBorder += 2
 					continue
 				} else {
-					// TODO: Open evar
-					// hole.pattern
-					if f.Name == "Evaluate0" {
-						fmt.Println(sentenceIdx, patterns)
-					}
-					
+
 					openEvars = append([]*ast.VarPatternNode{varNode}, openEvars...)
 					compiledSentence.NeedLoopReturn = true
 					compiledSentence.VarsToIdxs[ident] = [][]int{{nextBorder}}
@@ -901,8 +909,20 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 	case ast.CharactersResultType:
 		cNode := node.(*ast.CharactersResultNode)
 		cmd := "result = result.Insert(result.Len(), []runtime.R5Node{"
-		for _, c := range cNode.Value {
-			cmd += fmt.Sprintf("&runtime.R5NodeChar{Char: %d}, ", c)
+		
+		for i := 0; i < len(cNode.Value); i++ {
+			currChar := cNode.Value[i]
+			if currChar == '\\' {
+				currChar = cNode.Value[i+1]
+				if currChar == '"' {
+					cmd += fmt.Sprintf("&runtime.R5NodeChar{Char: '%c'}, ", currChar)
+				} else {
+					cmd += fmt.Sprintf("&runtime.R5NodeChar{Char: '\\%c'}, ", currChar)
+				}
+				i += 1
+			} else {
+				cmd += fmt.Sprintf("&runtime.R5NodeChar{Char: '%c'}, ", currChar)
+			}
 		}
 		return []string{cmd + "})\n"}
 	case ast.FunctionCallResultType:

@@ -3,7 +3,7 @@ package library
 import (
 	"bufio"
 	"fmt"
-	"io"
+	// "io"
 	"math/big"
 	"strings"
 
@@ -224,22 +224,31 @@ func R5tGet(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	fileNo := numberNode.Number % runtime.R5Number(MaxOpenFiles)
 
 	file := openFiles[fileNo]
-	scaned := ""
 
-	_, err := fmt.Fscanln(file, &scaned)
+	buf := make([]byte, 1)
 
+	eof := false
 	result := []runtime.R5Node{}
 
-	if err == io.EOF {
-		result = append(result, &runtime.R5NodeChar{Char: '0'})
-	} else if err != nil {
-		// TODO: handle
+	for {
+		n, err := file.Read(buf)
+		if err != nil {
+			eof = true
+			break
+		}
+		if n == 0 {
+			break
+		}
+
+		if buf[0] == '\n' {
+			break
+		}
+
+		result = append(result, &runtime.R5NodeChar{Char: buf[0]})
 	}
 
-	chars := []byte(scaned)
-
-	for _, c := range chars {
-		result = append(result, &runtime.R5NodeChar{Char: c})
+	if eof {
+		result = append(result, &runtime.R5NodeNumber{Number: 0})
 	}
 
 	*rhsStack = append(
@@ -348,6 +357,8 @@ func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}
 
 	}
+	
+	fmt.Printf("\n")
 }
 
 /*

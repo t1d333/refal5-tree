@@ -1,7 +1,5 @@
 package runtime
 
-import "fmt"
-
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -461,13 +459,13 @@ func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 }
 
 func StartMainLoop(initViewField []ViewFieldNode) error {
-	viewFieldLhs := []ViewFieldNode{}
+	viewFieldLhs :=  []ViewFieldNode{}
 	viewFieldRhs := initViewField
 
 	step := 0
 	for len(viewFieldRhs) > 0 {
 		step += 1
-		fmt.Println("STEP #", step)
+
 		curr := viewFieldRhs[0]
 		viewFieldRhs = viewFieldRhs[1:]
 
