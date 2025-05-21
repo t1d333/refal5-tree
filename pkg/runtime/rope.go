@@ -18,9 +18,31 @@ const (
 	RopeNodeLeafType
 )
 
-const (
-	RopeLeafLengthMax = 10
-)
+func VisualizeRopeTree(node RopeNode, level int) {
+	if node == nil {
+		return
+	}
+
+	indent := ""
+	for i := 0; i < level; i++ {
+		indent += "  " // 2 пробела на каждый уровень
+	}
+
+	switch n := node.(type) {
+	case *RopeNodeInner:
+		fmt.Printf("%s[Inner W:%d H:%d]\n", indent, n.Weight, n.Height)
+		if n.Left != nil {
+			VisualizeRopeTree(n.Left, level+1)
+		}
+		if n.Right != nil {
+			VisualizeRopeTree(n.Right, level+1)
+		}
+	case *RopeNodeLeaf:
+		fmt.Printf("%s[Leaf Len:%d]\n", indent, len(n.Data))
+	default:
+		fmt.Printf("%s[Unknown Node]\n", indent)
+	}
+}
 
 type Rope struct {
 	root         RopeNode
@@ -641,11 +663,15 @@ func (r *Rope) ConcatAVL(other *Rope) *Rope {
 		return result.balanceAVL()
 	}
 
+	var res *Rope
+
 	if diff > 0 {
-		return &Rope{root: r.concatLeft(r.root, other.root)}
+		res = &Rope{root: r.concatLeft(r.root, other.root)}
+	} else {
+		res = &Rope{root: r.concatRight(r.root, other.root)}
 	}
 
-	return &Rope{root: r.concatRight(r.root, other.root)}
+	return res.balanceAVL()
 }
 
 func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
@@ -657,7 +683,7 @@ func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
 			Right:  rhs,
 		}
 	}
-	
+
 	root := lhs.(*RopeNodeInner)
 	diff := root.Height - rhs.GetHeight()
 
@@ -670,8 +696,8 @@ func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
 
 		r.updateAVLBalanceInfo(newNode)
 
-		//  return balance(&RopeNode{left: A.left, right: balance(newNode)})
 		newRoot := &RopeNodeInner{Left: root.Left, Right: newNode}
+		r.updateAVLBalanceInfo(newRoot)
 
 		return r.balanceNodeAVL(newRoot)
 	}
@@ -703,7 +729,7 @@ func (r *Rope) concatLeft(lhs, rhs RopeNode) RopeNode {
 		r.updateAVLBalanceInfo(newNode)
 
 		newRoot := &RopeNodeInner{Left: newNode, Right: root.Right}
-		r.updateAVLBalanceInfo(newNode)
+		r.updateAVLBalanceInfo(newRoot)
 
 		return r.balanceNodeAVL(newRoot)
 	}

@@ -1,5 +1,16 @@
 package runtime
 
+import (
+	"os"
+	"runtime/pprof"
+)
+
+var (
+ ProfFile *os.File
+	
+)
+
+
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
 }
@@ -461,6 +472,11 @@ func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 func StartMainLoop(initViewField []ViewFieldNode) error {
 	viewFieldLhs :=  []ViewFieldNode{}
 	viewFieldRhs := initViewField
+	
+	ProfFile, _ := os.Create("cpu.prof")
+	pprof.StartCPUProfile(ProfFile);
+	defer pprof.StopCPUProfile()
+	
 
 	step := 0
 	for len(viewFieldRhs) > 0 {
@@ -626,6 +642,7 @@ func BuildRopeViewFieldNode(r *Rope, viewField *[]ViewFieldNode) {
 }
 
 func CopyExprTermVar(l, r int, src, dst *Rope) {
+	
 	for i := l; i <= r; i++ {
 		*dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
 	}
