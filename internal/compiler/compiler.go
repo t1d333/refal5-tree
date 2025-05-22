@@ -20,6 +20,7 @@ const (
 package main
 
 import (
+	"fmt"
 	"github.com/t1d333/refal5-tree/pkg/runtime"
 	"github.com/t1d333/refal5-tree/pkg/library"
 )
@@ -50,6 +51,16 @@ func main() {
 
 	compiledFunctionTmplString = `
 func r5t{{.Name}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
+	if arg.Len() > 1000000 {
+		runtime.VisualizeRope(arg, 0)
+		panic("BIG SIZE ROPE")
+	}
+	
+	if !arg.IsAVLBalanced() {
+		runtime.VisualizeRope(arg, 0)
+		panic(fmt.Sprintf("{{.Name}} arg is not balanced: %d", arg.BalanceFactor()))
+	}
+	
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
@@ -868,7 +879,7 @@ func (c *Compiler) GenerateSentence(
 
 	buildResultCmds := []string{}
 	for _, r := range sentenceRhs.Result {
-		tmp := c.buildResultCmds(r, compiledSentence.VarsToIdxs)
+		tmp := c.buildResultCmds(r, compiledSentence.VarsToIdxs, map[string]int{})
 		buildResultCmds = append(buildResultCmds, tmp...)
 	}
 
@@ -904,12 +915,16 @@ func (c *Compiler) GenerateSentence(
 	return compiledSentence
 }
 
-func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][][]int) []string {
+func (c *Compiler) buildResultCmds(
+	node ast.ResultNode,
+	varsToIdxs map[string][][]int,
+	varsShift map[string]int,
+) []string {
 	switch node.GetResultType() {
 	case ast.CharactersResultType:
 		cNode := node.(*ast.CharactersResultNode)
 		cmd := "result = result.Insert(result.Len(), []runtime.R5Node{"
-		
+
 		for i := 0; i < len(cNode.Value); i++ {
 			currChar := cNode.Value[i]
 			if currChar == '\\' {
@@ -953,7 +968,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 		}
 
 		for _, arg := range fNode.Args {
-			fCmds = append(fCmds, c.buildResultCmds(arg, varsToIdxs)...)
+			fCmds = append(fCmds, c.buildResultCmds(arg, varsToIdxs, varsShift)...)
 		}
 		fCmds = append(
 			fCmds,
@@ -996,10 +1011,21 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
 			return []string{fmt.Sprintf("runtime.CopySymbolVar(p[%d], arg, result)", idxs[0][0])}
 		} else {
-			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
-			if len(idxs) == 0 {
-				fmt.Println(fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name))
+			ident := fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)
+			idxs := varsToIdxs[ident]
+			if shift, ok := varsShift[ident]; (ok && shift < len(idxs)) || !ok {
+				if !ok {
+					shift = 0
+				}
+
+				varsShift[ident] += 1
+
+				return []string{
+					fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
+					// fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], arg, result)", idxs[shift][0], idxs[shift][0]+1),
+				}
 			}
+
 			return []string{
 				fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
 			}
@@ -1009,7 +1035,7 @@ func (c *Compiler) buildResultCmds(node ast.ResultNode, varsToIdxs map[string][]
 		gCmds := []string{}
 
 		for _, r := range gNode.Results {
-			gCmds = append(gCmds, c.buildResultCmds(r, varsToIdxs)...)
+			gCmds = append(gCmds, c.buildResultCmds(r, varsToIdxs, varsShift)...)
 		}
 
 		gCmds = append(gCmds,

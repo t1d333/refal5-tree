@@ -10,13 +10,40 @@ type (
 )
 
 const (
-	MaxLeafLength = 1000
+	MaxLeafLength = 1000000
 )
 
 const (
 	RopeNodeInnerType = iota
 	RopeNodeLeafType
 )
+
+func VisualizeRope(r *Rope, level int) {
+	node := r.root
+	if node == nil {
+		return
+	}
+
+	indent := ""
+	for i := 0; i < level; i++ {
+		indent += "  " // 2 пробела на каждый уровень
+	}
+
+	switch n := node.(type) {
+	case *RopeNodeInner:
+		fmt.Printf("%s[Inner W:%d H:%d]\n", indent, n.Weight, n.Height)
+		if n.Left != nil {
+			VisualizeRopeTree(n.Left, level+1)
+		}
+		if n.Right != nil {
+			VisualizeRopeTree(n.Right, level+1)
+		}
+	case *RopeNodeLeaf:
+		fmt.Printf("%s[Leaf Len:%d]\n", indent, len(n.Data))
+	default:
+		fmt.Printf("%s[Unknown Node]\n", indent)
+	}
+}
 
 func VisualizeRopeTree(node RopeNode, level int) {
 	if node == nil {
@@ -185,6 +212,10 @@ func (r *Rope) updateAVLBalanceInfo(x RopeNode) {
 	}
 
 	inner.Height = 1 + max(leftHeight, rightHeight)
+}
+
+func (r *Rope) BalanceFactor() int {
+	return r.balanceFactorAVL(r.root)
 }
 
 func (r *Rope) balanceFactorAVL(node RopeNode) int {
@@ -392,7 +423,7 @@ func (r *Rope) Concat(other *Rope) *Rope {
 		rLeaf := r.root.(*RopeNodeLeaf)
 		otherLeaf := other.root.(*RopeNodeLeaf)
 
-		if r.Len()+other.Len() < MaxLeafLength {
+		if r.Len()+other.Len() <= MaxLeafLength {
 			return &Rope{
 				fibGenerator: r.fibGenerator,
 				root: &RopeNodeLeaf{
@@ -513,8 +544,8 @@ func (r *Rope) splitRec(n RopeNode, i int) (RopeNode, RopeNode) {
 			return &RopeNodeLeaf{leaf.Data}, &RopeNodeLeaf{}
 		}
 
-		left := &RopeNodeLeaf{leaf.Data[i:]}
-		right := &RopeNodeLeaf{leaf.Data[:i]}
+		left := &RopeNodeLeaf{leaf.Data[:i]}
+		right := &RopeNodeLeaf{leaf.Data[i:]}
 		return left, right
 
 	}
@@ -544,21 +575,24 @@ func (r *Rope) splitRec(n RopeNode, i int) (RopeNode, RopeNode) {
 
 	r1, r2 := r.splitRec(inner.Right, i)
 	left := &RopeNodeInner{
-		Weight: r1.GetWeight(),
-		Height: r1.GetHeight() + 1,
-		Left:   inner.Left,
-		Right:  r1,
+		Left:  inner.Left,
+		Right: r1,
 	}
 
-	if inner.Left != nil {
-		left.Weight += inner.Left.GetWeight()
-		left.Height = max(inner.Left.GetHeight(), r1.GetHeight()) + 1
-	}
+	r.updateAVLBalanceInfo(left)
 
 	return left, r2
 }
 
 func (r *Rope) Insert(i int, data []R5Node) *Rope {
+	if len(data) == 0 {
+		return r
+	}
+
+	if r.Len() == 0 {
+		return NewRope(data)
+	}
+
 	if i < 0 || i > r.Len() {
 		return nil
 	}
@@ -597,7 +631,7 @@ func (r *Rope) Delete(i int) {
 
 	_, tmpRhs := r.Split(i + 1)
 
-	tmp := tmpLhs.ConcatWithRebalance(tmpRhs)
+	tmp := tmpLhs.ConcatAVL(tmpRhs)
 	r.root = tmp.root
 }
 
@@ -638,6 +672,38 @@ func (r *Rope) String() string {
 }
 
 func (r *Rope) ConcatAVL(other *Rope) *Rope {
+	if r.Len() == 0 {
+		return other
+	}
+
+	if other.Len() == 0 {
+		return r
+	}
+
+	if r.Height() == 0 && other.Height() == 0 {
+		lhsLeaf := r.root.(*RopeNodeLeaf)
+		rhsLeaf := other.root.(*RopeNodeLeaf)
+
+		buff := append(lhsLeaf.Data, rhsLeaf.Data...)
+
+		if r.root.GetWeight()+other.root.GetWeight() <= MaxLeafLength {
+			return &Rope{
+				root: &RopeNodeLeaf{
+					Data: buff,
+				},
+			}
+		} else {
+			newLhsLeaf := &RopeNodeLeaf{buff[:MaxLeafLength]}
+			newRhsLeaf := &RopeNodeLeaf{buff[MaxLeafLength:]}
+			newRoot := &RopeNodeInner{Left: newLhsLeaf, Right: newRhsLeaf}
+			r.updateAVLBalanceInfo(newRoot)
+			return &Rope{
+				root: newRoot,
+			}
+		}
+
+	}
+	
 	diff := other.Height() - r.Height()
 	if -2 < diff && diff < 2 {
 		return &Rope{
@@ -665,27 +731,48 @@ func (r *Rope) ConcatAVL(other *Rope) *Rope {
 
 	var res *Rope
 
-	if diff > 0 {
-		res = &Rope{root: r.concatLeft(r.root, other.root)}
-	} else {
+	if r.Height() > other.Height() {
 		res = &Rope{root: r.concatRight(r.root, other.root)}
+	} else {
+		res = &Rope{root: r.concatLeft(r.root, other.root)}
 	}
 
 	return res.balanceAVL()
 }
 
-func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
-	if lhs.NodeType() == RopeNodeLeafType && rhs.NodeType() == RopeNodeLeafType {
-		return &RopeNodeInner{
-			Weight: lhs.GetWeight() + rhs.GetWeight(),
-			Height: 1,
-			Left:   lhs,
-			Right:  rhs,
+func (r *Rope) concatLeaves(lhs, rhs *RopeNodeLeaf) RopeNode {
+	buff := append(lhs.Data, rhs.Data...)
+	if len(buff) <= MaxLeafLength {
+		return &RopeNodeLeaf{
+			buff,
 		}
 	}
 
-	root := lhs.(*RopeNodeInner)
-	diff := root.Height - rhs.GetHeight()
+	return &RopeNodeInner{
+		Weight: lhs.GetWeight() + rhs.GetWeight(),
+		Height: 1,
+		Left:   &RopeNodeLeaf{buff[:MaxLeafLength]},
+		Right:  &RopeNodeLeaf{buff[MaxLeafLength:]},
+	}
+}
+
+func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
+	if lhs.NodeType() == RopeNodeLeafType && rhs.NodeType() == RopeNodeLeafType {
+		lhsLeaf := lhs.(*RopeNodeLeaf)
+		rhsLeaf := rhs.(*RopeNodeLeaf)
+
+		return r.concatLeaves(lhsLeaf, rhsLeaf)
+	}
+
+	root, ok := lhs.(*RopeNodeInner)
+	
+	if !ok {
+		VisualizeRopeTree(lhs, 1)
+		fmt.Println("-----------------------")
+		VisualizeRopeTree(rhs, 1)
+	}
+	
+	diff := root.Right.GetHeight() - rhs.GetHeight()
 
 	if root.Right == nil || (-1 <= diff && diff <= 1) {
 
@@ -709,12 +796,10 @@ func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
 
 func (r *Rope) concatLeft(lhs, rhs RopeNode) RopeNode {
 	if lhs.NodeType() == RopeNodeLeafType && rhs.NodeType() == RopeNodeLeafType {
-		return &RopeNodeInner{
-			Weight: lhs.GetWeight() + rhs.GetWeight(),
-			Height: 1,
-			Left:   lhs,
-			Right:  rhs,
-		}
+		lhsLeaf := lhs.(*RopeNodeLeaf)
+		rhsLeaf := rhs.(*RopeNodeLeaf)
+
+		return r.concatLeaves(lhsLeaf, rhsLeaf)
 	}
 
 	root := rhs.(*RopeNodeInner)
