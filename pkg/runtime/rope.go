@@ -10,7 +10,7 @@ type (
 )
 
 const (
-	MaxLeafLength = 1000000
+	MaxLeafLength = 10000
 )
 
 const (
@@ -384,7 +384,7 @@ func (n *RopeNodeInner) GetHeight() int {
 
 func NewRope(n []R5Node) *Rope {
 	return &Rope{
-		fibGenerator: fibonacci(),
+		fibGenerator: nil,
 		root: &RopeNodeLeaf{
 			Data: n,
 		},
@@ -527,6 +527,93 @@ func (r *Rope) Split(i int) (*Rope, *Rope) {
 		}
 }
 
+func (r *Rope) splitRec2(node RopeNode, k int) (RopeNode, RopeNode) {
+	if node == nil {
+		return nil, nil
+	}
+
+	if node.GetHeight() == RopeNodeLeafType {
+		leaf := node.(*RopeNodeLeaf)
+		if k == 0 {
+			return nil, node
+		}
+
+		if k >= node.GetWeight() {
+			return node, nil
+		}
+
+		left := &RopeNodeLeaf{leaf.Data[:k]}
+		right := &RopeNodeLeaf{leaf.Data[k:]}
+
+		return left, right
+	}
+	inner := node.(*RopeNodeInner)
+
+	if k < inner.Left.GetWeight() {
+		leftPart, rightPart := r.splitRec(inner.Left, k)
+
+		newRight := (&Rope{root: rightPart}).ConcatAVL((&Rope{root: rightPart})).root
+		return leftPart, newRight
+	} else if k > inner.Left.GetWeight() {
+		leftPart, rightPart := r.splitRec(inner.Right, k-inner.Left.GetWeight())
+		newLeft := (&Rope{root: inner.Left}).ConcatAVL((&Rope{root: leftPart})).root
+		return newLeft, rightPart
+	}
+	return inner.Left, inner.Right
+	// 	if k < node.weight {
+	// 		// Split in left subtree
+	// 		leftPart, rightPart := split(node.left, k)
+	// 		// Rebuild right side with rightPart + node.right
+	// 		newRight := concat(rightPart, node.right)
+	// 		return leftPart, newRight
+	// 	} else if k > node.weight {
+	// 		// Split in right subtree, adjusting k
+	// 		leftPart, rightPart := split(node.right, k - node.weight)
+	// 		// Rebuild left side with node.left + leftPart
+	// 		newLeft := concat(node.left, leftPart)
+	// 		return newLeft, rightPart
+	// 	} else {
+	// 		// Exact split at weight
+	// 		return node.left, node.right
+	// 	}
+}
+
+// func split(node *RopeNode, k int) (*RopeNode, *RopeNode) {
+// 	if node == nil {
+// 		return nil, nil
+// 	}
+//
+// 	if node.isLeaf() {
+// 		if k == 0 {
+// 			return nil, node
+// 		}
+// 		if k >= len(node.s) {
+// 			return node, nil
+// 		}
+// 		// Split the string in the leaf
+// 		left := &RopeNode{ s: node.s[:k] }
+// 		right := &RopeNode{ s: node.s[k:] }
+// 		return left, right
+// 	}
+//
+// 	if k < node.weight {
+// 		// Split in left subtree
+// 		leftPart, rightPart := split(node.left, k)
+// 		// Rebuild right side with rightPart + node.right
+// 		newRight := concat(rightPart, node.right)
+// 		return leftPart, newRight
+// 	} else if k > node.weight {
+// 		// Split in right subtree, adjusting k
+// 		leftPart, rightPart := split(node.right, k - node.weight)
+// 		// Rebuild left side with node.left + leftPart
+// 		newLeft := concat(node.left, leftPart)
+// 		return newLeft, rightPart
+// 	} else {
+// 		// Exact split at weight
+// 		return node.left, node.right
+// 	}
+// }
+
 func (r *Rope) splitRec(n RopeNode, i int) (RopeNode, RopeNode) {
 	if n == nil {
 		return nil, nil
@@ -642,30 +729,30 @@ func (r *Rope) String() string {
 		switch node.Type() {
 		case R5DatatagChar:
 			charNode := node.(*R5NodeChar)
-			result += fmt.Sprintf("(Char: %c) ", charNode.Char)
+			result += fmt.Sprintf("%c ", charNode.Char)
 		case R5DatatagCloseBracket:
-			closeBrNode := node.(*R5NodeCloseBracket)
-			result += fmt.Sprintf("(CloseBracket, OpenOffset: %d) ", closeBrNode.OpenOffset)
+			// closeBrNode := node.(*R5NodeCloseBracket)
+			result += fmt.Sprintf(")")
 		case R5DatatagCloseCall:
-			closeCallNode := node.(*R5NodeCloseCall)
-			result += fmt.Sprintf("(CloseCall, OpenOffset: %d) ", closeCallNode.OpenOffset)
+			// closeCallNode := node.(*R5NodeCloseCall)
+			result += fmt.Sprintf(">")
 		case R5DatatagFunction:
 			funcNode := node.(*R5NodeFunction)
-			result += fmt.Sprintf("(Function: %s) ", funcNode.Function.Name)
+			result += fmt.Sprintf("% ", funcNode.Function.Name)
 		case R5DatatagIllegal:
 			result += fmt.Sprintf("(Illegal) ")
 		case R5DatatagNumber:
 			numberNode := node.(*R5NodeNumber)
-			result += fmt.Sprintf("(Number: %d) ", numberNode.Number)
+			result += fmt.Sprintf("%d ", numberNode.Number)
 		case R5DatatagString:
 			strNode := node.(*R5NodeString)
-			result += fmt.Sprintf("(String: %s) ", strNode.String)
+			result += fmt.Sprintf("%s ", strNode.String)
 		case R5DatatagOpenBracket:
-			openBrNode := node.(*R5NodeOpenBracket)
-			result += fmt.Sprintf("(OpenBracket: CloseOffset: %d) ", openBrNode.CloseOffset)
+			// openBrNode := node.(*R5NodeOpenBracket)
+			result += fmt.Sprintf("(")
 		case R5DatatagOpenCall:
-			openCallNode := node.(*R5NodeOpenCall)
-			result += fmt.Sprintf("(OpenCall: CloseOffset: %d) ", openCallNode.CloseOffset)
+			// openCallNode := node.(*R5NodeOpenCall)
+			result += fmt.Sprintf("< ")
 		}
 	}
 	return result
@@ -685,6 +772,11 @@ func (r *Rope) ConcatAVL(other *Rope) *Rope {
 		rhsLeaf := other.root.(*RopeNodeLeaf)
 
 		buff := append(lhsLeaf.Data, rhsLeaf.Data...)
+		return &Rope{
+			root: &RopeNodeLeaf{
+				Data: buff,
+			},
+		}
 
 		if r.root.GetWeight()+other.root.GetWeight() <= MaxLeafLength {
 			return &Rope{
@@ -703,7 +795,7 @@ func (r *Rope) ConcatAVL(other *Rope) *Rope {
 		}
 
 	}
-	
+
 	diff := other.Height() - r.Height()
 	if -2 < diff && diff < 2 {
 		return &Rope{
@@ -765,13 +857,13 @@ func (r *Rope) concatRight(lhs, rhs RopeNode) RopeNode {
 	}
 
 	root, ok := lhs.(*RopeNodeInner)
-	
+
 	if !ok {
 		VisualizeRopeTree(lhs, 1)
 		fmt.Println("-----------------------")
 		VisualizeRopeTree(rhs, 1)
 	}
-	
+
 	diff := root.Right.GetHeight() - rhs.GetHeight()
 
 	if root.Right == nil || (-1 <= diff && diff <= 1) {

@@ -140,13 +140,16 @@ func (t *AST) RebuildBlockSentences() {
 	for ; i < len(t.Functions); i++ {
 		function := t.Functions[i]
 		for idx, sentence := range function.Body {
-			if sentence.Rhs.GetSentenceRhsType() != SentenceRhsBlockType {
+
+			sentenceBlock, ok := sentence.Rhs.(*SentenceRhsBlockNode)
+
+			if !ok {
 				continue
 			}
-			sentenceBlock := sentence.Rhs.(*SentenceRhsBlockNode)
 
 			lhsVars := t.ExtractVariables(sentence.Lhs, map[string]interface{}{})
-			groupedLhsVars := t.GroupExprPatternVars(lhsVars)
+
+			groupedLhsVars := t.GroupPatternVars(lhsVars)
 			rhsFunction := &FunctionNode{
 				Name:  fmt.Sprintf("%s_%d", function.Name, idx),
 				Entry: false,
@@ -154,9 +157,23 @@ func (t *AST) RebuildBlockSentences() {
 			}
 
 			for _, innerSentence := range sentenceBlock.Body {
-				updatedSentence := innerSentence
-				updatedSentence.Lhs = append(groupedLhsVars, updatedSentence.Lhs...)
-				rhsFunction.Body = append(rhsFunction.Body, updatedSentence)
+				// updatedSentence :=
+				// updatedSentence.Lhs =
+				lhs := []PatternNode{}
+
+				for _, v := range groupedLhsVars {
+					lhs = append(lhs, v)
+				}
+
+				for _, v := range innerSentence.Lhs {
+					lhs = append(lhs, v)
+				}
+
+				rhsFunction.Body = append(rhsFunction.Body, &SentenceNode{
+					Rhs:         innerSentence.Rhs,
+					Condtitions: innerSentence.Condtitions,
+					Lhs:         lhs,
+				})
 			}
 
 			t.Functions = append(t.Functions, rhsFunction)
@@ -333,41 +350,6 @@ func (t *AST) BuildHelpFunctionsForSentenceConditions(
 	t.Functions = append(t.Functions, contFunction)
 }
 
-func (a *AST) BuildTemplateT0(
-	patterns []PatternNode,
-	openExprVarMap map[string]bool,
-) []ResultNode {
-	result := []ResultNode{}
-	queue := patterns
-
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
-		switch curr.GetPatternType() {
-		case GroupedPatternType:
-			grouped := curr.(*GroupedPatternNode)
-			result = append(result, a.BuildTemplateT0(grouped.Patterns, openExprVarMap)...)
-			// queue = append(grouped.Patterns, queue...)
-		case VarPatternType:
-			varNode := curr.(*VarPatternNode)
-			if varNode.Type == ExprVarType && !openExprVarMap[varNode.Name] {
-				openExprVarMap[varNode.Name] = true
-
-				result = append(
-					result,
-					&GroupedResultNode{Results: []ResultNode{varNode.ToResultNode()}},
-				)
-			} else {
-				result = append(result, varNode.ToResultNode())
-			}
-		default:
-			result = append(result, PatternToResult(curr))
-		}
-	}
-
-	return result
-}
-
 func (t *AST) BuildForwardFunction(
 	k int,
 	originFunc *FunctionNode,
@@ -446,19 +428,6 @@ func (a *AST) BuildNextFunction(
 ) *FunctionNode {
 	targetVariable := openEvars[k]
 	// vars(Pat) | e.K → e.K_fix e.K_var
-	if originFunc.Name == "Evaluate0" {
-		for _, e := range openEvars {
-			fmt.Printf("OPENEVARS: %#v\n", e)
-			fmt.Printf("LAST : %#v\n", originSentence.Lhs[len(originSentence.Lhs)-1])
-		}
-
-		for _, e := range originSentence.Lhs {
-			fmt.Printf("LHS : %#v\n", e)
-		}
-
-		fmt.Printf("RHS : %#v\n", originSentence.Rhs)
-
-	}
 
 	replacementPatternVariables := []PatternNode{
 		&VarPatternNode{
@@ -495,30 +464,6 @@ func (a *AST) BuildNextFunction(
 	nextForwardIdent := fmt.Sprintf("%sForward%d", originFunc.Name, k+1)
 	if k+1 == len(openEvars) {
 		nextForwardIdent = fmt.Sprintf("%sCont", originFunc.Name)
-	}
-
-	if originFunc.Name == "Evaluate0" && k == 0 {
-		for _, a := range originSentence.Lhs {
-			fmt.Printf("%#v\n", a)
-		}
-
-		fmt.Printf("-------------------\n")
-		t := a.BuildConditionTemplate(
-			k,
-			T5TemplateType,
-			originSentence.Lhs,
-			openEvars,
-			map[string]interface{}{})
-
-		for _, a := range t {
-			fmt.Printf("%#v\n", a)
-			g, ok := a.(*GroupedPatternNode)
-			if ok {
-				for _, b := range g.Patterns {
-					fmt.Printf("%#v\n", b)
-				}
-			}
-		}
 	}
 
 	return &FunctionNode{
@@ -671,7 +616,8 @@ func (a *AST) BuildConditionTemplate(
 
 		varNode := curr.(*VarPatternNode)
 
-		if varNode.Type != ExprVarType || len(queue) == 0 {
+		if _, ok := varsSeen[varNode.Name]; varNode.Type != ExprVarType ||
+			(len(queue) == 0 && !ok) {
 			*result = append(*result, curr)
 			continue
 		}
@@ -700,6 +646,7 @@ func (a *AST) BuildConditionTemplate(
 			continue
 		} else if templateType == T5TemplateType && varNode.Name == openEvars[target].Name {
 			// e.X_fix e.X_var
+
 			*result = append(*result, &VarPatternNode{
 				Name: fmt.Sprintf("%sFix", openEvars[target].Name),
 				Type: ExprVarType,
@@ -812,7 +759,8 @@ func (a *AST) BuildConditionTemplate(
 			isInactive := false
 			for i := target + 1; i < len(openEvars); i++ {
 				openVar := openEvars[i]
-				if varNode.Name == openVar.Name {
+				if _, ok := varsSeen[varNode.Name]; !ok && varNode.Name == openVar.Name {
+					varsSeen[varNode.Name] = struct{}{}
 					*result = append(*result, &GroupedPatternNode{Patterns: []PatternNode{
 						varNode,
 					}})
@@ -838,10 +786,14 @@ func (a *AST) BuildConditionTemplate(
 				}
 			}
 
-			if !isInactive {
+			if _, ok := varsSeen[varNode.Name]; !ok && !isInactive {
+				varsSeen[varNode.Name] = struct{}{}
+
 				*result = append(*result, &GroupedPatternNode{
 					Patterns: []PatternNode{varNode},
 				})
+			} else if !isInactive {
+				*result = append(*result, varNode)
 			}
 		}
 
@@ -852,6 +804,24 @@ func (a *AST) BuildConditionTemplate(
 	}
 
 	return resultLhs
+}
+
+func (t *AST) GroupPatternVars(patterns []PatternNode) []PatternNode {
+	result := []PatternNode{}
+	for _, pattern := range patterns {
+		_, ok := pattern.(*VarPatternNode)
+		if !ok {
+			result = append(result, pattern)
+			continue
+		}
+
+		result = append(result, &GroupedPatternNode{
+			Patterns: []PatternNode{
+				pattern,
+			},
+		})
+	}
+	return result
 }
 
 func (t *AST) GroupExprPatternVars(patterns []PatternNode) []PatternNode {
@@ -953,9 +923,6 @@ func (t *AST) checkResultVarUsage(result []ResultNode, variables map[string]inte
 	for len(queue) > 0 {
 		curr := queue[0]
 		queue = queue[1:]
-		if curr == nil {
-			fmt.Println(curr)
-		}
 
 		if curr.GetResultType() == VarResultType {
 			variable := curr.(*VarResultNode)

@@ -26,4 +26,7 @@ autotests: build
 	cd autotests && bash run.sh
 	
 	
+rmcc: rmcc.ref
+	./build/refal5t rmcc.ref
+	go build rmcc.go
 	

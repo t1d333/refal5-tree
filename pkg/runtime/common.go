@@ -1,8 +1,8 @@
 package runtime
 
 import (
-	// "fmt"
 	"os"
+	"runtime/pprof"
 )
 
 var ProfFile *os.File
@@ -469,9 +469,9 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 	viewFieldLhs := []ViewFieldNode{}
 	viewFieldRhs := initViewField
 
-	// ProfFile, _ := os.Create("cpu.prof")
-	// pprof.StartCPUProfile(ProfFile)
-	// defer pprof.StopCPUProfile()
+	ProfFile, _ := os.Create("cpu.prof")
+	pprof.StartCPUProfile(ProfFile)
+	defer pprof.StopCPUProfile()
 
 	step := 0
 	for len(viewFieldRhs) > 0 {
@@ -500,10 +500,11 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 		case CloseBracketType:
 			if inner, ok := viewFieldLhs[len(viewFieldLhs)-1].(*RopeViewFieldNode); ok {
 				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-2]
-				grouped := NewRope([]R5Node{&R5NodeOpenBracket{CloseOffset: inner.Value.Len() + 1}})
-				grouped = grouped.Concat(inner.Value)
-				grouped = grouped.Concat(
-					NewRope([]R5Node{&R5NodeCloseBracket{OpenOffset: inner.Value.Len() + 1}}),
+				offset := inner.Value.Len() + 1
+				grouped := NewRope([]R5Node{&R5NodeOpenBracket{CloseOffset: offset}})
+				grouped = grouped.ConcatAVL(inner.Value)
+				grouped = grouped.ConcatAVL(
+					NewRope([]R5Node{&R5NodeCloseBracket{OpenOffset: offset}}),
 				)
 
 				viewFieldRhs = append(
@@ -535,7 +536,7 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 				rhsRope := curr.(*RopeViewFieldNode)
 				viewFieldLhs = append(
 					viewFieldLhs,
-					&RopeViewFieldNode{Value: lhsRope.Value.Concat(rhsRope.Value)},
+					&RopeViewFieldNode{Value: lhsRope.Value.ConcatAVL(rhsRope.Value)},
 				)
 			} else {
 				viewFieldLhs = append(viewFieldLhs, curr)

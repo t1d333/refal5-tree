@@ -16,6 +16,7 @@ const (
 
 type ResultNode interface {
 	GetResultType() ResultType
+	String() string
 }
 
 func GetResultLengthInRuntimeNodes(r ResultNode) int {
@@ -62,12 +63,20 @@ type CharactersResultNode struct {
 	Value []byte
 }
 
+func (n *CharactersResultNode) String() string {
+	return "'" + string(n.Value) + "'"
+}
+
 func (*CharactersResultNode) GetResultType() ResultType {
 	return CharactersResultType
 }
 
 type WordResultNode struct {
 	Value string
+}
+
+func (w *WordResultNode) String() string {
+	return w.Value
 }
 
 func (*WordResultNode) GetResultType() ResultType {
@@ -79,12 +88,28 @@ type FunctionCallResultNode struct {
 	Args  []ResultNode
 }
 
+func (f *FunctionCallResultNode) String() string {
+	res := fmt.Sprintf("<%s", f.Ident)
+
+	for _, arg := range f.Args {
+		res += " " + arg.String()
+	}
+
+	res += ">"
+
+	return res
+}
+
 func (*FunctionCallResultNode) GetResultType() ResultType {
 	return FunctionCallResultType
 }
 
 type NumberResultNode struct {
 	Value uint
+}
+
+func (n *NumberResultNode) String() string {
+	return fmt.Sprintf("%d", n.Value)
 }
 
 func (*NumberResultNode) GetResultType() ResultType {
@@ -94,6 +119,10 @@ func (*NumberResultNode) GetResultType() ResultType {
 type VarResultNode struct {
 	Type VariableType
 	Name string
+}
+
+func (v *VarResultNode) String() string {
+	return fmt.Sprintf("%s.%s", v.GetVarTypeStr(), v.Name)
 }
 
 func (v *VarResultNode) GetVarTypeStr() string {
@@ -119,6 +148,10 @@ type StringResultNode struct {
 	Value string
 }
 
+func (s *StringResultNode) String() string {
+	return fmt.Sprintf("\"%s\"", s.Value)
+}
+
 func (*StringResultNode) GetResultType() ResultType {
 	return StringResultType
 }
@@ -129,6 +162,17 @@ func (*VarResultNode) GetResultType() ResultType {
 
 type GroupedResultNode struct {
 	Results []ResultNode
+}
+
+func (g *GroupedResultNode) String() string {
+	res := "("
+
+	for _, n := range g.Results {
+		res += " " + n.String()
+	}
+
+	res += " )"
+	return res
 }
 
 func (*GroupedResultNode) GetResultType() ResultType {
@@ -153,10 +197,12 @@ func ReplaceResultVariable(
 
 		} else if curr.GetResultType() == GroupedResultType {
 			grouped := curr.(*GroupedResultNode)
-			result = append(result, ReplaceResultVariable(grouped.Results, target, replacement)...)
+			newGrouped := &GroupedResultNode{ReplaceResultVariable(grouped.Results, target, replacement)}
+			result = append(result, newGrouped)
 		} else if curr.GetResultType() == FunctionCallResultType {
-			callNode :=  curr.(*FunctionCallResultNode)
-			result = append(result, ReplaceResultVariable(callNode.Args, target, replacement)...)
+			callNode := curr.(*FunctionCallResultNode)
+			newCall := &FunctionCallResultNode{Ident: callNode.Ident, Args: ReplaceResultVariable(callNode.Args, target, replacement)}
+			result = append(result, newCall)
 		} else {
 			result = append(result, curr)
 		}

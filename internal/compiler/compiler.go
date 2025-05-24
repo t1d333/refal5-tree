@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"container/heap"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -310,7 +311,7 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 				Body:  generatedBody,
 				Entry: function.Entry,
 			}
-
+		
 			functions = append(functions, compiled)
 		}
 	}
@@ -355,6 +356,38 @@ func (c *Compiler) GenerateFunctionBodyCode(
 type patternHole struct {
 	patterns []ast.PatternNode
 	borders  [][]int
+	level    int
+}
+
+type holeQueue []patternHole
+
+func (pq holeQueue) Len() int { return len(pq) }
+
+func (pq holeQueue) Less(i, j int) bool {
+	return pq[i].level > pq[j].level
+}
+
+func (pq holeQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+	// pq[i].index = i
+	// pq[j].index = j
+}
+
+// Push добавляет элемент (heap.Interface)
+func (pq *holeQueue) Push(x any) {
+	// n := len(*pq)
+	item := x.(patternHole)
+	// item.index = n
+	*pq = append(*pq, item)
+}
+
+func (pq *holeQueue) Pop() any {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	// item.index = -1 // для безопасности
+	*pq = old[0 : n-1]
+	return item
 }
 
 type exprVarLoop struct {
@@ -376,16 +409,24 @@ func (c *Compiler) GenerateSentence(
 		Commands:       []string{},
 		NeedLoopReturn: false,
 	}
-	if f.Name == "Evaluate0" {
-		fmt.Println("GENERATE FOR FUNC: ", f.Name, sentenceIdx)
-	}
-
 	// TODO: build pattern matching
 
-	patternHoles := []patternHole{{
-		patterns: sentence.Lhs,
-		borders:  [][]int{{0, 1}},
-	}}
+	// patternHoles := []patternHole{{
+	// 	patterns: sentence.Lhs,
+	// 	borders:  [][]int{{0, 1}},
+	// 	level: 0,
+	// }}
+
+	patternHoles := make(holeQueue, 0)
+
+	heap.Init(&patternHoles)
+	heap.Push(&patternHoles,
+		patternHole{
+			patterns: sentence.Lhs,
+			borders:  [][]int{{0, 1}},
+			level:    0,
+		},
+	)
 
 	cmds := []string{}
 	nextBorder := 2
@@ -395,8 +436,7 @@ func (c *Compiler) GenerateSentence(
 	allVars := []ast.PatternNode{}
 
 	for len(patternHoles) > 0 {
-		hole := patternHoles[0]
-		patternHoles = patternHoles[1:]
+		hole := heap.Pop(&patternHoles).(patternHole)
 		patterns := hole.patterns
 
 		borders := hole.borders
@@ -639,10 +679,14 @@ func (c *Compiler) GenerateSentence(
 				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[1:]
-				patternHoles = append(patternHoles, patternHole{
-					patterns: grouped.Patterns,
-					borders:  [][]int{{nextBorder, nextBorder + 1}},
-				})
+				heap.Push(&patternHoles,
+					patternHole{
+						patterns: grouped.Patterns,
+						borders:  [][]int{{nextBorder, nextBorder + 1}},
+						level: hole.level + 1,
+					},
+				)
+				// patternHoles = append([]patternHole{}, patternHoles...)
 				borders = append([][]int{{nextBorder + 1, right}}, borders...)
 				if len(exprVarLoops) > 0 {
 					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
@@ -663,10 +707,17 @@ func (c *Compiler) GenerateSentence(
 				cmd := c.generateMatchCmd(cmdArg)
 
 				patterns = patterns[:len(patterns)-1]
-				patternHoles = append(patternHoles, patternHole{
-					patterns: grouped.Patterns,
-					borders:  [][]int{{nextBorder, nextBorder + 1}},
-				})
+				// patternHoles = append([]patternHole{{
+				// 	patterns: grouped.Patterns,
+				// 	borders:  [][]int{{nextBorder, nextBorder + 1}},
+				// }}, patternHoles...)
+				heap.Push(&patternHoles,
+					patternHole{
+						patterns: grouped.Patterns,
+						borders:  [][]int{{nextBorder, nextBorder + 1}},
+						level: hole.level + 1,
+					},
+				)
 				borders = append([][]int{{left, nextBorder}}, borders...)
 				if len(exprVarLoops) > 0 {
 					exprVarLoops[len(exprVarLoops)-1].Cmds = append(
@@ -752,7 +803,7 @@ func (c *Compiler) GenerateSentence(
 						case LeftMatchCmdType:
 							borders = append([][]int{{nextBorder + 1, right}}, borders...)
 						case RightMatchCmdType:
-							borders = append([][]int{{left, nextBorder + 1}}, borders...)
+							borders = append([][]int{{left, nextBorder}}, borders...)
 						}
 						nextBorder += 2
 					}
@@ -787,7 +838,7 @@ func (c *Compiler) GenerateSentence(
 						case LeftMatchCmdType:
 							borders = append([][]int{{nextBorder + 1, right}}, borders...)
 						case RightMatchCmdType:
-							borders = append([][]int{{left, nextBorder + 1}}, borders...)
+							borders = append([][]int{{left, nextBorder}}, borders...)
 						}
 						nextBorder += 2
 					}

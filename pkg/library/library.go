@@ -502,6 +502,7 @@ func R5tArg(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
 			Value: runtime.NewRope(result),
 		}}, *rhsStack...)
+		
 }
 
 func R5tCompare(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
@@ -911,9 +912,10 @@ func R5tNumb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
-	if r-l > 2 {
-		panic("Recognition failed")
-	}
+	// if r-l > 2 {
+		// fmt.Println("ARG: ", arg.String())
+		// panic("Recognition failed")
+	// }
 
 	first := arg.Get(curr)
 

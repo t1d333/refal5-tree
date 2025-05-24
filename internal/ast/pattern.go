@@ -23,10 +23,15 @@ const (
 
 type PatternNode interface {
 	GetPatternType() PatternType
+	String() string
 }
 
 type CharactersPatternNode struct {
 	Value []byte
+}
+
+func (n *CharactersPatternNode) String() string {
+	return "'" + string(n.Value) + "'"
 }
 
 func (*CharactersPatternNode) GetPatternType() PatternType {
@@ -41,8 +46,16 @@ func (*WordPatternNode) GetPatternType() PatternType {
 	return WordPatternType
 }
 
+func (w *WordPatternNode) String() string {
+	return w.Value
+}
+
 type NumberPatternNode struct {
 	Value uint
+}
+
+func (n *NumberPatternNode) String() string {
+	return fmt.Sprintf("%d", n.Value)
 }
 
 func (*NumberPatternNode) GetPatternType() PatternType {
@@ -53,6 +66,10 @@ type StringPatternNode struct {
 	Value string
 }
 
+func (s *StringPatternNode) String() string {
+	return fmt.Sprintf("\"%s\"", s.Value)
+}
+
 func (*StringPatternNode) GetPatternType() PatternType {
 	return StringPatternType
 }
@@ -60,6 +77,10 @@ func (*StringPatternNode) GetPatternType() PatternType {
 type VarPatternNode struct {
 	Type VariableType
 	Name string
+}
+
+func (v *VarPatternNode) String() string {
+	return fmt.Sprintf("%s.%s", v.GetVarTypeStr(), v.Name)
 }
 
 func (*VarPatternNode) GetPatternType() PatternType {
@@ -87,6 +108,17 @@ func (v *VarPatternNode) ToResultNode() ResultNode {
 
 type GroupedPatternNode struct {
 	Patterns []PatternNode
+}
+
+func (g *GroupedPatternNode) String() string {
+	res := "("
+
+	for _, n := range g.Patterns {
+		res += " " + n.String()
+	}
+
+	res += " )"
+	return res
 }
 
 func (*GroupedPatternNode) GetPatternType() PatternType {
