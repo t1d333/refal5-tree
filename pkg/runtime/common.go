@@ -2,7 +2,16 @@ package runtime
 
 import (
 	"os"
-	"runtime/pprof"
+	// "runtime/pprof"
+)
+
+var (
+	Buired map[string][]R5Node
+)
+
+
+var (
+	StepCounter = 0
 )
 
 var ProfFile *os.File
@@ -468,15 +477,8 @@ func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 func StartMainLoop(initViewField []ViewFieldNode) error {
 	viewFieldLhs := []ViewFieldNode{}
 	viewFieldRhs := initViewField
-
-	ProfFile, _ := os.Create("cpu.prof")
-	pprof.StartCPUProfile(ProfFile)
-	defer pprof.StopCPUProfile()
-
-	step := 0
+	
 	for len(viewFieldRhs) > 0 {
-		step += 1
-
 		curr := viewFieldRhs[0]
 		viewFieldRhs = viewFieldRhs[1:]
 
@@ -493,6 +495,7 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-1]
 				openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
 			}
+			StepCounter += 1
 		case OpenCallType:
 			viewFieldLhs = append(viewFieldLhs, curr)
 		case OpenBracketType:
@@ -547,7 +550,6 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 		}
 	}
 
-	// PrintViewField(viewFieldLhs)
 	return nil
 }
 

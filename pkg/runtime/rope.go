@@ -10,7 +10,7 @@ type (
 )
 
 const (
-	MaxLeafLength = 10000
+	MaxLeafLength = 50000
 )
 
 const (
@@ -26,7 +26,7 @@ func VisualizeRope(r *Rope, level int) {
 
 	indent := ""
 	for i := 0; i < level; i++ {
-		indent += "  " // 2 пробела на каждый уровень
+		indent += "  "
 	}
 
 	switch n := node.(type) {
@@ -772,11 +772,11 @@ func (r *Rope) ConcatAVL(other *Rope) *Rope {
 		rhsLeaf := other.root.(*RopeNodeLeaf)
 
 		buff := append(lhsLeaf.Data, rhsLeaf.Data...)
-		return &Rope{
-			root: &RopeNodeLeaf{
-				Data: buff,
-			},
-		}
+		// return &Rope{
+		// 	root: &RopeNodeLeaf{
+		// 		Data: buff,
+		// 	},
+		// }
 
 		if r.root.GetWeight()+other.root.GetWeight() <= MaxLeafLength {
 			return &Rope{

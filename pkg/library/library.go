@@ -3,8 +3,11 @@ package library
 import (
 	"bufio"
 	"fmt"
+	"unicode"
+
 	// "io"
 	"math/big"
+	"math/rand/v2"
 	"strings"
 
 	// "fmt"
@@ -34,24 +37,6 @@ import (
 // random.ref: ERROR Function Random is not defined
 // random.ref: ERROR Function Rp is not defined
 // random.ref: ERROR Function Type is not defined
-
-// Refal-05 lib usage
-
-// Chr 3
-// Div 2
-// First 1
-// Get 2
-// Mod 2
-// Ord 4
-// Prout 7
-// Putout 2
-// Type 19
-// GetEnv 4
-// System 1
-// Exit 3
-// ExistFile 1
-// Implode_Ext 1
-// ListOfBuiltin 2
 
 const (
 	MaxOpenFiles = 40
@@ -211,6 +196,73 @@ func parseAtithmArgs(l, r int, arg *runtime.Rope) (*big.Int, *big.Int, error) {
 	return nil, nil, fmt.Errorf("Recognition failed")
 }
 
+func R5tRandom(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	if r-l > 2 {
+		panic("Recognition Failed")
+	}
+
+	curr := l + 1
+	lengthNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
+
+	if !ok {
+		panic("Recognition Failed")
+	}
+
+	length := int32(1)
+
+	if lengthNode.Number > 0 {
+		length = rand.Int32N(int32(lengthNode.Number) + 1)
+	}
+
+	result := []runtime.R5Node{}
+	for i := int32(0); i < length; i++ {
+		randomNum := rand.Int32()
+		result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number(randomNum)})
+	}
+
+	fmt.Println("----", result, length)
+
+	*rhsStack = append(
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+			Value: runtime.NewRope(result),
+		}}, *rhsStack...)
+}
+
+func R5tRandomDigit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	if r-l > 2 {
+		panic("Recognition Failed")
+	}
+
+	curr := l + 1
+	numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
+
+	if !ok {
+		panic("Recognition Failed")
+	}
+
+	randomNum := rand.Int32N(int32(numberNode.Number))
+
+	result := []runtime.R5Node{&runtime.R5NodeNumber{Number: runtime.R5Number(randomNum)}}
+
+	*rhsStack = append(
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+			Value: runtime.NewRope(result),
+		}}, *rhsStack...)
+}
+
+func R5tStep(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	if r-l > 2 {
+		panic("Recognition failed")
+	}
+
+	step := []runtime.R5Node{&runtime.R5NodeNumber{runtime.R5Number(runtime.StepCounter)}}
+
+	*rhsStack = append(
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+			Value: runtime.NewRope(step),
+		}}, *rhsStack...)
+}
+
 func R5tGet(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
@@ -357,7 +409,7 @@ func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}
 
 	}
-	
+
 	fmt.Printf("\n")
 }
 
@@ -502,7 +554,6 @@ func R5tArg(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
 			Value: runtime.NewRope(result),
 		}}, *rhsStack...)
-		
 }
 
 func R5tCompare(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
@@ -704,6 +755,10 @@ func R5tDiv(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
+func R5tImplode_Ext(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	R5tImplode(l, r, arg, rhsStack)
+}
+
 /*
 	<Implode e.Expr>
 */
@@ -762,6 +817,10 @@ func R5tImplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 /*
 <Explode s.Identifier> возвращает строку символов, которая составляла s.Idenitifier .
 */
+
+func R5tExplode_Ext(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	R5tExplode(l, r, arg, rhsStack)
+}
 
 func R5tExplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	begin := l + 1
@@ -913,8 +972,8 @@ func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
 	// if r-l > 2 {
-		// fmt.Println("ARG: ", arg.String())
-		// panic("Recognition failed")
+	// fmt.Println("ARG: ", arg.String())
+	// panic("Recognition failed")
 	// }
 
 	first := arg.Get(curr)
@@ -969,41 +1028,70 @@ func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 */
 
 func R5tType(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
-	if arg.Len() == 0 {
-		panic("Recognition failed")
-	}
+	resultType := &runtime.R5NodeChar{}
+	resultSubType := &runtime.R5NodeChar{}
 
-	first := arg.Get(0)
-	result := &runtime.R5NodeChar{}
+	result := []runtime.R5Node{resultType, resultSubType}
 
-	switch first.Type() {
-	case runtime.R5DatatagChar:
-		charNode := first.(*runtime.R5NodeChar)
-		if (charNode.Char >= 'a' && charNode.Char <= 'z') ||
-			(charNode.Char >= 'Z' && charNode.Char <= 'Z') {
-			result.Char = 'L'
-		} else if charNode.Char >= '0' && charNode.Char <= '9' {
-			result.Char = 'D'
-		} else {
-			result.Char = 'O'
+	if r-l < 2 {
+		resultType.Char = '*'
+		resultSubType.Char = '0'
+		return
+	} else {
+		curr := l + 1
+
+		first := arg.Get(curr)
+
+		switch first.Type() {
+		case runtime.R5DatatagChar:
+			charNode := first.(*runtime.R5NodeChar)
+			if charNode.Char >= 'a' && charNode.Char <= 'z' {
+				resultType.Char = 'L'
+				resultSubType.Char = 'l'
+			} else if charNode.Char >= 'Z' && charNode.Char <= 'Z' {
+				resultType.Char = 'L'
+				resultSubType.Char = 'u'
+			} else if unicode.IsPrint(rune(charNode.Char)) && unicode.IsUpper(rune(charNode.Char)) {
+				resultType.Char = 'P'
+				resultSubType.Char = 'u'
+			} else if unicode.IsPrint(rune(charNode.Char)) && !unicode.IsUpper(rune(charNode.Char)) {
+				resultType.Char = 'P'
+				resultSubType.Char = 'l'
+			} else if unicode.IsUpper(rune(charNode.Char)) {
+				resultType.Char = 'P'
+				resultSubType.Char = 'u'
+			} else {
+				resultType.Char = 'P'
+				resultSubType.Char = 'l'
+			}
+		case runtime.R5DatatagFunction:
+			resultType.Char = 'W'
+			resultSubType.Char = 'q'
+		case runtime.R5DatatagNumber:
+			resultType.Char = 'N'
+			resultSubType.Char = '0'
+		case runtime.R5DatatagOpenBracket:
+			resultType.Char = 'B'
+			resultSubType.Char = '0'
+		case runtime.R5DatatagString:
+			resultType.Char = 'W'
+			strNode := first.(*runtime.R5NodeString)
+			if !unicode.IsDigit(rune(strNode.String[0])) && !unicode.IsLetter(rune(strNode.String[0])) {
+				resultSubType.Char = 'q'
+			} else {
+				resultSubType.Char = 'i'
+				for _, c := range strNode.String {
+					if c != '-' && c != '_' && !unicode.IsLetter(c) && !unicode.IsDigit(c) {
+						resultSubType.Char = 'q'
+						break
+					}
+				}
+			}
 		}
-	case runtime.R5DatatagFunction:
-		result.Char = 'F'
-	case runtime.R5DatatagNumber:
-		result.Char = 'N'
-	case runtime.R5DatatagOpenBracket:
-		result.Char = 'B'
-	case runtime.R5DatatagOpenCall:
-		result.Char = 'B'
-	case runtime.R5DatatagString:
-		result.Char = 'O'
-	default:
-		panic("Recognition failed")
-
 	}
 
 	*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
-		Value: runtime.NewRope([]runtime.R5Node{result}),
+		Value: runtime.NewRope(result).Concat(arg),
 	}}, *rhsStack...)
 }
 
@@ -1032,6 +1120,65 @@ func R5tMod(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 }
 
 func R5tChr(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	curr := l + 1
+	result := []runtime.R5Node{}
+
+	for curr < r {
+		node := arg.Get(curr)
+
+		curr += 1
+		if numberNode, ok := node.(*runtime.R5NodeNumber); !ok {
+			result = append(result, node)
+			continue
+		} else {
+			result = append(result, &runtime.R5NodeChar{Char: byte(numberNode.Number % 256)})
+		}
+	}
+
+	*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+		Value: runtime.NewRope(result),
+	}}, *rhsStack...)
+}
+
+func R5tOrd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	curr := l + 1
+	result := []runtime.R5Node{}
+
+	for curr < r {
+		node := arg.Get(curr)
+
+		curr += 1
+		if charNode, ok := node.(*runtime.R5NodeChar); !ok {
+			result = append(result, node)
+			continue
+		} else {
+			if charNode.Char != '\\' {
+				result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number(charNode.Char)})
+				continue
+			}
+
+			charNode = arg.Get(curr).(*runtime.R5NodeChar)
+			switch charNode.Char {
+			case '\\':
+				result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number('\\')})
+			case 't':
+				result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number('\t')})
+			case 'r':
+				result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number('\r')})
+			case 'n':
+				result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number('\n')})
+			case '"':
+				result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number('"')})
+			}
+
+			// result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number()})
+		}
+
+	}
+
+	*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+		Value: runtime.NewRope(result),
+	}}, *rhsStack...)
 }
 
 // TODO: implement

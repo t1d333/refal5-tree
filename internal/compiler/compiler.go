@@ -21,7 +21,7 @@ const (
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"github.com/t1d333/refal5-tree/pkg/runtime"
 	"github.com/t1d333/refal5-tree/pkg/library"
 )
@@ -52,16 +52,6 @@ func main() {
 
 	compiledFunctionTmplString = `
 func r5t{{.Name}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
-	if arg.Len() > 1000000 {
-		runtime.VisualizeRope(arg, 0)
-		panic("BIG SIZE ROPE")
-	}
-	
-	if !arg.IsAVLBalanced() {
-		runtime.VisualizeRope(arg, 0)
-		panic(fmt.Sprintf("{{.Name}} arg is not balanced: %d", arg.BalanceFactor()))
-	}
-	
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
@@ -1072,8 +1062,8 @@ func (c *Compiler) buildResultCmds(
 				varsShift[ident] += 1
 
 				return []string{
-					fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
-					// fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], arg, result)", idxs[shift][0], idxs[shift][0]+1),
+					// fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
+					fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], arg, result)", idxs[shift][0], idxs[shift][0]+1),
 				}
 			}
 
