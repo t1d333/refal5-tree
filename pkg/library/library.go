@@ -1,7 +1,6 @@
 package library
 
 import (
-	"bufio"
 	"fmt"
 	"unicode"
 
@@ -16,27 +15,6 @@ import (
 
 	"github.com/t1d333/refal5-tree/pkg/runtime"
 )
-
-// rmcc.ref
-// rmcc1.ref: ERROR Function Get is not defined
-// rmcc1.ref: ERROR Function Put is not defined
-
-// random.ref
-// random.ref: ERROR Function Br is not defined
-// random.ref: ERROR Function Chr is not defined
-// random.ref: ERROR Function Cp is not defined
-// random.ref: ERROR Function Dg is not defined
-// random.ref: ERROR Function Div is not defined
-// random.ref: ERROR Function Explode_Ext is not defined
-// random.ref: ERROR Function Implode_Ext is not defined
-// random.ref: ERROR Function Mod is not defined
-// random.ref: ERROR Function Ord is not defined
-// random.ref: ERROR Function Prout is not defined
-// random.ref: ERROR Function Putout is not defined
-// random.ref: ERROR Function RandomDigit is not defined
-// random.ref: ERROR Function Random is not defined
-// random.ref: ERROR Function Rp is not defined
-// random.ref: ERROR Function Type is not defined
 
 const (
 	MaxOpenFiles = 40
@@ -252,7 +230,7 @@ func R5tRandomDigit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNo
 
 func R5tStep(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l > 2 {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	step := []runtime.R5Node{&runtime.R5NodeNumber{runtime.R5Number(runtime.StepCounter)}}
@@ -263,6 +241,41 @@ func R5tStep(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
+func R5tCard(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	file := os.Stdin
+
+	buf := make([]byte, 1)
+
+	eof := false
+	result := []runtime.R5Node{}
+
+	for {
+		n, err := file.Read(buf)
+		if err != nil {
+			eof = true
+			break
+		}
+		if n == 0 {
+			break
+		}
+
+		if buf[0] == '\n' {
+			break
+		}
+
+		result = append(result, &runtime.R5NodeChar{Char: buf[0]})
+	}
+
+	if eof {
+		result = append(result, &runtime.R5NodeNumber{Number: 0})
+	}
+
+	*rhsStack = append(
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+			Value: runtime.NewRope(result),
+		}}, *rhsStack...)
+}
+
 func R5tGet(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
@@ -270,12 +283,16 @@ func R5tGet(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr += 1
 
 	if !ok {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
+
+	file := os.Stdin
 
 	fileNo := numberNode.Number % runtime.R5Number(MaxOpenFiles)
 
-	file := openFiles[fileNo]
+	if fileNo > 0 {
+		file = openFiles[fileNo]
+	}
 
 	buf := make([]byte, 1)
 
@@ -316,13 +333,17 @@ func R5tPut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr += 1
 
 	if !ok {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
+	file := os.Stderr
+
 	fileNo := numberNode.Number % runtime.R5Number(MaxOpenFiles)
+	if fileNo > 0 {
+		file = openFiles[fileNo]
+	}
 
 	// TODO: check if file is open
-	file := openFiles[fileNo]
 
 	for curr < r {
 		node := arg.Get(curr)
@@ -336,7 +357,7 @@ func R5tPut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}
 
 		if strNode, ok := node.(*runtime.R5NodeString); ok {
-			_, err := fmt.Fprintf(file, "%s ", strNode.String)
+			_, err := fmt.Fprintf(file, "%s ", strNode.Value)
 			if err != nil {
 				// TODO: hanlde
 			}
@@ -362,7 +383,74 @@ func R5tPut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 				// TODO: hanlde
 			}
 		}
+	}
 
+	_, result := arg.Split(l + 1)
+
+	*rhsStack = append(
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+			Value: result,
+		}}, *rhsStack...)
+}
+
+func R5tPutout(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	curr := l + 1
+
+	numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
+	curr += 1
+
+	if !ok {
+		runtime.RecognitionImpossible()
+	}
+
+	fileNo := numberNode.Number % runtime.R5Number(MaxOpenFiles)
+
+	// TODO: check if file is open
+
+	file := os.Stderr
+
+	if fileNo > 0 {
+		file = openFiles[fileNo]
+	}
+
+	for curr < r {
+		node := arg.Get(curr)
+		curr += 1
+
+		if charNode, ok := node.(*runtime.R5NodeChar); ok {
+			_, err := fmt.Fprintf(file, "%c", charNode.Char)
+			if err != nil {
+				// TODO: hanlde
+			}
+		}
+
+		if strNode, ok := node.(*runtime.R5NodeString); ok {
+			_, err := fmt.Fprintf(file, "%s ", strNode.Value)
+			if err != nil {
+				// TODO: hanlde
+			}
+		}
+
+		if numNode, ok := node.(*runtime.R5NodeNumber); ok {
+			_, err := fmt.Fprintf(file, "%d ", numNode.Number)
+			if err != nil {
+				// TODO: hanlde
+			}
+		}
+
+		if _, ok := node.(*runtime.R5NodeOpenBracket); ok {
+			_, err := fmt.Fprintf(file, "(")
+			if err != nil {
+				// TODO: hanlde
+			}
+		}
+
+		if _, ok := node.(*runtime.R5NodeCloseBracket); ok {
+			_, err := fmt.Fprintf(file, ")")
+			if err != nil {
+				// TODO: hanlde
+			}
+		}
 	}
 }
 
@@ -381,7 +469,7 @@ func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}
 
 		if strNode, ok := node.(*runtime.R5NodeString); ok {
-			_, err := fmt.Printf("%s ", strNode.String)
+			_, err := fmt.Printf("%s ", strNode.Value)
 			if err != nil {
 				// TODO: hanlde
 			}
@@ -413,13 +501,42 @@ func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	fmt.Printf("\n")
 }
 
+func R5tExit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	if r-l < 2 || r-l > 3 {
+		runtime.RecognitionImpossible()
+	}
+
+	curr := l + 1
+	exitCode := 1
+
+	if charNode, ok := arg.Get(curr).(*runtime.R5NodeChar); ok && charNode.Char == '-' {
+		exitCode = -1
+		curr += 1
+		curr += 1
+	} else if ok && charNode.Char != '-' {
+		runtime.RecognitionImpossible()
+	}
+
+	numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
+
+	if !ok {
+		runtime.RecognitionImpossible()
+	}
+
+	exitCode *= int(numberNode.Number)
+
+	fmt.Println("EXIT CODE: ", exitCode)
+
+	os.Exit(exitCode)
+}
+
 /*
 <Close s.FileNo> == пусто
 Семантика. Закрывает открытый файл с номером s.FileNo % 40. Если файл с этим номером не был открыт, функция ничего не делает.
 */
 func R5tClose(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l < 2 || r-l > 2 {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	curr := l + 1
@@ -429,7 +546,7 @@ func R5tClose(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		fileNo = int(numberNode.Number % 40)
 		curr += 1
 	} else {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	file := openFiles[fileNo]
@@ -452,7 +569,7 @@ e.FileName ::= s.CHAR+
 */
 func R5tOpen(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l < 3 {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	curr := l + 1
@@ -473,20 +590,20 @@ func R5tOpen(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}
 		curr += 1
 	} else if ok {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	} else if strNode, ok := currNode.(*runtime.R5NodeString); ok &&
-		(strNode.String == "rb" || strNode.String == "wb" || strNode.String == "ab") {
+		(strNode.Value == "rb" || strNode.Value == "wb" || strNode.Value == "ab") {
 		curr += 1
 		// TODO: impl
 	} else {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	if numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber); ok {
 		fileNo = int(numberNode.Number % 40)
 		curr += 1
 	} else {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	// TODO: close if already opened
@@ -497,7 +614,7 @@ func R5tOpen(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 		charNode, ok := node.(*runtime.R5NodeChar)
 		if !ok {
-			panic("Recognition failed")
+			runtime.RecognitionImpossible()
 		}
 
 		fileName += string(charNode.Char)
@@ -527,7 +644,7 @@ e.Argument ::= s.CHAR*
 
 func R5tArg(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 || l-r > 2 {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	curr := l + 1
@@ -535,7 +652,7 @@ func R5tArg(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	argNumb, ok := arg.Get(curr).(*runtime.R5NodeNumber)
 
 	if !ok {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	osArg := []byte{}
@@ -563,7 +680,7 @@ func R5tCompare(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 
 	lhs, rhs, err := parseAtithmArgs(l, r, arg)
 	if err != nil {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	compareResult := lhs.Cmp(rhs)
@@ -594,7 +711,7 @@ func R5tAdd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 	lhs, rhs, err := parseAtithmArgs(l, r, arg)
 	if err != nil {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	result = lhs.Add(lhs, rhs)
@@ -635,7 +752,7 @@ func R5tSub(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 	lhs, rhs, err := parseAtithmArgs(l, r, arg)
 	if err != nil {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	result = lhs.Sub(lhs, rhs)
@@ -676,7 +793,7 @@ func R5tMul(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 	lhs, rhs, err := parseAtithmArgs(l, r, arg)
 	if err != nil {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	result = lhs.Mul(lhs, rhs)
@@ -709,7 +826,6 @@ func R5tMul(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 }
 
 func R5tDiv(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
-	// TODO: need fix
 	if r-l <= 1 {
 		return
 	}
@@ -718,19 +834,77 @@ func R5tDiv(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 	lhs, rhs, err := parseAtithmArgs(l, r, arg)
 	if err != nil {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
-	mod := big.NewInt(0)
-	mod.Mod(lhs, rhs)
-	lhs.Sub(lhs, mod)
-	fmt.Println("MOD: ", mod, lhs, rhs)
+	sign := 1
 
-	result.Div(lhs, rhs)
-	sign := result.Sign()
+	if lhs.Sign() == -1 {
+		sign *= -1
+		lhs = lhs.Neg(lhs)
+	}
+
+	if rhs.Sign() == -1 {
+		sign *= -1
+		rhs = rhs.Neg(rhs)
+	}
+
+	result = result.Div(lhs, rhs)
+
+	resultDigits := bigIntToRefalLong(result)
+
+	if len(resultDigits) == 0 {
+		resultDigits = append(resultDigits, 0)
+	}
+
+	r5result := []runtime.R5Node{}
+
+	for _, digit := range resultDigits {
+		r5result = append([]runtime.R5Node{&runtime.R5NodeNumber{Number: digit}}, r5result...)
+	}
 
 	if sign < 0 {
-		result = result.Neg(result)
+		r5result = append([]runtime.R5Node{&runtime.R5NodeChar{Char: '-'}}, r5result...)
+	}
+
+	*rhsStack = append(
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
+			Value: runtime.NewRope(r5result),
+		}}, *rhsStack...)
+}
+
+func R5tMod(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+	if r-l <= 1 {
+		return
+	}
+
+	result := big.NewInt(0)
+
+	lhs, rhs, err := parseAtithmArgs(l, r, arg)
+	if err != nil {
+		runtime.RecognitionImpossible()
+	}
+
+	sign := 1
+
+	// if lhs.Sign() == -1 {
+	// 	sign *= -1
+	// 	lhs = lhs.Neg(lhs)
+	// }
+	//
+	// if rhs.Sign() == -1 {
+	// 	sign *= -1
+	// 	rhs = rhs.Neg(rhs)
+	// }
+
+	fmt.Println("LHS", lhs, "RHS", rhs)
+
+	result = result.Mod(lhs, rhs)
+
+	fmt.Println("RESULT", result)
+
+	if result.Sign() < -1 {
+		sign *= -1
 	}
 
 	resultDigits := bigIntToRefalLong(result)
@@ -804,7 +978,7 @@ func R5tImplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 		curr += 1
 	}
 
-	identResult := runtime.NewRope([]runtime.R5Node{&runtime.R5NodeString{String: ident}})
+	identResult := runtime.NewRope([]runtime.R5Node{&runtime.R5NodeString{Value: ident}})
 	_, other := arg.Split(curr)
 
 	*rhsStack = append([]runtime.ViewFieldNode{
@@ -826,17 +1000,17 @@ func R5tExplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 	begin := l + 1
 
 	if r-l > 2 || r-l <= 1 {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	curr := arg.Get(begin)
 
 	if curr.Type() != runtime.R5DatatagString {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	identNode := curr.(*runtime.R5NodeString)
-	identChars := []byte(identNode.String)
+	identChars := []byte(identNode.Value)
 
 	ident := []runtime.R5Node{}
 
@@ -971,11 +1145,6 @@ func R5tNumb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
-	// if r-l > 2 {
-	// fmt.Println("ARG: ", arg.String())
-	// panic("Recognition failed")
-	// }
-
 	first := arg.Get(curr)
 
 	sign := byte(0)
@@ -985,11 +1154,11 @@ func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		curr += 1
 		first = arg.Get(curr)
 	} else if ok {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	if first.Type() != runtime.R5DatatagNumber {
-		panic("Recognition failed")
+		runtime.RecognitionImpossible()
 	}
 
 	numberNode := first.(*runtime.R5NodeNumber)
@@ -1010,22 +1179,6 @@ func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		),
 	}}, *rhsStack...)
 }
-
-/*
-<Type e.Expr>
-
-возвращает s.Type e.Expr , где e.Expr является неизменным, а s.Type зависит от типа первого элемента выражения e.Expr .
-
-  s.Type   e.Expr начинается с:
-  'L'      буквы
-  'D'      цифры
-  'F'      идентификатора или имени функции
-  'N'      макроцифры
-  'R'      действительного числа
-  'O'      любого другого символа
-  'B'      левой скобки
-  '*'      e.Expr  является пустым
-*/
 
 func R5tType(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	resultType := &runtime.R5NodeChar{}
@@ -1076,11 +1229,11 @@ func R5tType(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		case runtime.R5DatatagString:
 			resultType.Char = 'W'
 			strNode := first.(*runtime.R5NodeString)
-			if !unicode.IsDigit(rune(strNode.String[0])) && !unicode.IsLetter(rune(strNode.String[0])) {
+			if !unicode.IsDigit(rune(strNode.Value[0])) && !unicode.IsLetter(rune(strNode.Value[0])) {
 				resultSubType.Char = 'q'
 			} else {
 				resultSubType.Char = 'i'
-				for _, c := range strNode.String {
+				for _, c := range strNode.Value {
 					if c != '-' && c != '_' && !unicode.IsLetter(c) && !unicode.IsDigit(c) {
 						resultSubType.Char = 'q'
 						break
@@ -1114,9 +1267,6 @@ func R5tLenw(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 	*rhsStack = append(
 		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{Value: tmpRope}}, *rhsStack...)
-}
-
-func R5tMod(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 }
 
 func R5tChr(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
@@ -1181,31 +1331,6 @@ func R5tOrd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	}}, *rhsStack...)
 }
 
-// TODO: implement
-func R5tCard(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		line := scanner.Text() // Возвращает строку без символа конца строки
-		lineBytes := []byte(line)
-		rope := runtime.NewRope([]runtime.R5Node{})
-		for _, b := range lineBytes {
-			charNode := &runtime.R5NodeChar{Char: b}
-			rope = rope.Insert(rope.Len(), []runtime.R5Node{charNode})
-
-		}
-
-		*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
-			Value: rope,
-		}}, *rhsStack...)
-		return
-	}
-
-	endCode := &runtime.R5NodeNumber{Number: 0}
-	*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
-		Value: runtime.NewRope([]runtime.R5Node{endCode}),
-	}}, *rhsStack...)
-}
-
 func R5tExistsFile(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	filename := ""
 	for i := l; i < r; i++ {
@@ -1238,7 +1363,4 @@ func R5tExistsFile(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNod
 	*rhsStack = append(
 		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{Value: result}},
 		*rhsStack...)
-}
-
-func R5tPrint(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 }

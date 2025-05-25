@@ -51,11 +51,12 @@ func main() {
 }`
 
 	compiledFunctionTmplString = `
-func r5t{{.Name}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
+func r5t{{.CompiledName}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
-  panic("Recognition failed")
+	
+	runtime.RecognitionImpossible()
 }`
 
 	compiledSentenceTmplString = `
@@ -176,9 +177,10 @@ type CompiledProgram struct {
 }
 
 type CompiledFunction struct {
-	Name  string
-	Body  []CompiledSentence
-	Entry bool
+	Name         string
+	CompiledName string
+	Body         []CompiledSentence
+	Entry        bool
 }
 
 type CompiledSentence struct {
@@ -285,6 +287,7 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 		j := 0
 		for j < len(tree.Functions) {
 			function := tree.Functions[j]
+
 			j += 1
 
 			generatedBody, err := c.GenerateFunctionBodyCode(tree, function)
@@ -297,11 +300,12 @@ func (c *Compiler) Generate(trees []*ast.AST, goFunc *ast.FunctionNode) (string,
 			}
 
 			compiled := CompiledFunction{
-				Name:  function.Name,
-				Body:  generatedBody,
-				Entry: function.Entry,
+				Name:         function.Name,
+				CompiledName: strings.Replace(function.Name, "-", "_", -1),
+				Body:         generatedBody,
+				Entry:        function.Entry,
 			}
-		
+
 			functions = append(functions, compiled)
 		}
 	}
@@ -503,12 +507,22 @@ func (c *Compiler) GenerateSentence(
 				if charNode.Value[len(charNode.Value)-1] == '\\' {
 					cmdArg.Value = fmt.Sprintf("'\\%c'", charNode.Value[len(charNode.Value)-1])
 					charLength = 2
+				} else if len(charNode.Value) >= 2 && charNode.Value[len(charNode.Value)-2] == '\\' {
+					cmdArg.Value = fmt.Sprintf("'\\%c'", charNode.Value[len(charNode.Value)-1])
+					charLength = 2
 				} else {
 					cmdArg.Value = fmt.Sprintf("'%c'", charNode.Value[len(charNode.Value)-1])
 				}
 				cmd := c.generateMatchCmd(cmdArg)
 
 				charNodeCopy := *charNode
+				fmt.Println(
+					"LENGTH: ",
+					len(charNode.Value)-charLength,
+					f.Name,
+					len(charNode.Value),
+					charNode.Value,
+				)
 				charNodeCopy.Value = make([]byte, len(charNode.Value)-charLength)
 				copy(charNodeCopy.Value, charNode.Value[:len(charNode.Value)-charLength])
 
@@ -673,7 +687,7 @@ func (c *Compiler) GenerateSentence(
 					patternHole{
 						patterns: grouped.Patterns,
 						borders:  [][]int{{nextBorder, nextBorder + 1}},
-						level: hole.level + 1,
+						level:    hole.level + 1,
 					},
 				)
 				// patternHoles = append([]patternHole{}, patternHoles...)
@@ -705,7 +719,7 @@ func (c *Compiler) GenerateSentence(
 					patternHole{
 						patterns: grouped.Patterns,
 						borders:  [][]int{{nextBorder, nextBorder + 1}},
-						level: hole.level + 1,
+						level:    hole.level + 1,
 					},
 				)
 				borders = append([][]int{{left, nextBorder}}, borders...)
@@ -998,12 +1012,13 @@ func (c *Compiler) buildResultCmds(
 				),
 			)
 		} else {
+			ptrName := strings.Replace(fNode.Ident, "-", "_", -1)
 			fCmds = append(
 				fCmds,
 				fmt.Sprintf(
 					"runtime.BuildOpenCallViewFieldNode(runtime.R5Function{Name: \"%s\", Ptr: r5t%s_}, localViewField)\n",
 					fNode.Ident,
-					fNode.Ident,
+					ptrName,
 				),
 			)
 		}
@@ -1059,11 +1074,11 @@ func (c *Compiler) buildResultCmds(
 					shift = 0
 				}
 
-				varsShift[ident] += 1
+				varsShift[ident] = shift + 1
 
 				return []string{
-					// fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
-					fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], arg, result)", idxs[shift][0], idxs[shift][0]+1),
+					// fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[varsShift[ident]-1][0], idxs[varsShift[ident]-1][0]+1),
+					fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], arg, result)", idxs[varsShift[ident]-1][0], idxs[varsShift[ident]-1][0]+1),
 				}
 			}
 

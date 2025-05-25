@@ -10,7 +10,7 @@ type (
 )
 
 const (
-	MaxLeafLength = 50000
+	MaxLeafLength = 500000
 )
 
 const (
@@ -527,93 +527,6 @@ func (r *Rope) Split(i int) (*Rope, *Rope) {
 		}
 }
 
-func (r *Rope) splitRec2(node RopeNode, k int) (RopeNode, RopeNode) {
-	if node == nil {
-		return nil, nil
-	}
-
-	if node.GetHeight() == RopeNodeLeafType {
-		leaf := node.(*RopeNodeLeaf)
-		if k == 0 {
-			return nil, node
-		}
-
-		if k >= node.GetWeight() {
-			return node, nil
-		}
-
-		left := &RopeNodeLeaf{leaf.Data[:k]}
-		right := &RopeNodeLeaf{leaf.Data[k:]}
-
-		return left, right
-	}
-	inner := node.(*RopeNodeInner)
-
-	if k < inner.Left.GetWeight() {
-		leftPart, rightPart := r.splitRec(inner.Left, k)
-
-		newRight := (&Rope{root: rightPart}).ConcatAVL((&Rope{root: rightPart})).root
-		return leftPart, newRight
-	} else if k > inner.Left.GetWeight() {
-		leftPart, rightPart := r.splitRec(inner.Right, k-inner.Left.GetWeight())
-		newLeft := (&Rope{root: inner.Left}).ConcatAVL((&Rope{root: leftPart})).root
-		return newLeft, rightPart
-	}
-	return inner.Left, inner.Right
-	// 	if k < node.weight {
-	// 		// Split in left subtree
-	// 		leftPart, rightPart := split(node.left, k)
-	// 		// Rebuild right side with rightPart + node.right
-	// 		newRight := concat(rightPart, node.right)
-	// 		return leftPart, newRight
-	// 	} else if k > node.weight {
-	// 		// Split in right subtree, adjusting k
-	// 		leftPart, rightPart := split(node.right, k - node.weight)
-	// 		// Rebuild left side with node.left + leftPart
-	// 		newLeft := concat(node.left, leftPart)
-	// 		return newLeft, rightPart
-	// 	} else {
-	// 		// Exact split at weight
-	// 		return node.left, node.right
-	// 	}
-}
-
-// func split(node *RopeNode, k int) (*RopeNode, *RopeNode) {
-// 	if node == nil {
-// 		return nil, nil
-// 	}
-//
-// 	if node.isLeaf() {
-// 		if k == 0 {
-// 			return nil, node
-// 		}
-// 		if k >= len(node.s) {
-// 			return node, nil
-// 		}
-// 		// Split the string in the leaf
-// 		left := &RopeNode{ s: node.s[:k] }
-// 		right := &RopeNode{ s: node.s[k:] }
-// 		return left, right
-// 	}
-//
-// 	if k < node.weight {
-// 		// Split in left subtree
-// 		leftPart, rightPart := split(node.left, k)
-// 		// Rebuild right side with rightPart + node.right
-// 		newRight := concat(rightPart, node.right)
-// 		return leftPart, newRight
-// 	} else if k > node.weight {
-// 		// Split in right subtree, adjusting k
-// 		leftPart, rightPart := split(node.right, k - node.weight)
-// 		// Rebuild left side with node.left + leftPart
-// 		newLeft := concat(node.left, leftPart)
-// 		return newLeft, rightPart
-// 	} else {
-// 		// Exact split at weight
-// 		return node.left, node.right
-// 	}
-// }
-
 func (r *Rope) splitRec(n RopeNode, i int) (RopeNode, RopeNode) {
 	if n == nil {
 		return nil, nil
@@ -772,11 +685,11 @@ func (r *Rope) ConcatAVL(other *Rope) *Rope {
 		rhsLeaf := other.root.(*RopeNodeLeaf)
 
 		buff := append(lhsLeaf.Data, rhsLeaf.Data...)
-		// return &Rope{
-		// 	root: &RopeNodeLeaf{
-		// 		Data: buff,
-		// 	},
-		// }
+		return &Rope{
+			root: &RopeNodeLeaf{
+				Data: buff,
+			},
+		}
 
 		if r.root.GetWeight()+other.root.GetWeight() <= MaxLeafLength {
 			return &Rope{

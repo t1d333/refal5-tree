@@ -1,20 +1,72 @@
 package runtime
 
 import (
+	// "fmt"
+	"fmt"
 	"os"
 	// "runtime/pprof"
 )
 
-var (
-	Buired map[string][]R5Node
-)
-
+var Buired map[string][]R5Node
 
 var (
-	StepCounter = 0
+	viewFieldLhs            = []ViewFieldNode{}
+	viewFieldRhs            = []ViewFieldNode{}
+	primaryActiveExpression = []ViewFieldNode{}
 )
+
+var StepCounter = 0
 
 var ProfFile *os.File
+
+func RecognitionImpossible() {
+	fmt.Fprintf(os.Stderr, "RECOGNITION IMPOSIBLE\n")
+	fmt.Fprintln(os.Stderr)
+
+	viewField := append(viewFieldLhs, viewFieldRhs...)
+
+	fmt.Fprintf(os.Stderr, "STEP NUMBER: %d\n", StepCounter)
+	fmt.Fprintln(os.Stderr)
+
+	fmt.Fprintf(os.Stderr, "PRIMARY ACTIVE EXPRESSION:\n")
+	fmt.Fprintln(os.Stderr)
+	printViewfield(primaryActiveExpression)
+	fmt.Fprintf(os.Stderr, ">\n")
+	fmt.Fprintln(os.Stderr)
+
+	fmt.Fprintf(os.Stderr, "VIEW FIELD:\n")
+	fmt.Fprintln(os.Stderr)
+	printViewfield(viewField)
+	os.Exit(1)
+}
+
+func printViewfield(viewField []ViewFieldNode) {
+	indent := ""
+	for _, node := range viewField {
+		switch node.Type() {
+		case CloseBracketType:
+			indent = indent[:len(indent)-2]
+			fmt.Fprintln(os.Stderr, indent+")")
+		case CloseCallType:
+			indent = indent[:len(indent)-2]
+			fmt.Fprintln(os.Stderr, indent+">")
+		case OpenBracketType:
+			fmt.Fprintln(os.Stderr, indent+"(")
+			indent += "  "
+		case OpenCallType:
+			call := node.(*OpenCallViewFieldNode)
+			fmt.Fprintln(os.Stderr, indent+"<"+call.Function.Name)
+			indent += "  "
+		case RopeType:
+			rope := node.(*RopeViewFieldNode).Value
+			for i := 0; i < rope.Len(); i++ {
+				fmt.Fprintln(os.Stderr, indent+rope.Get(i).String())
+			}
+		default:
+			panic("unexpected runtime.ViewFieldNodeType")
+		}
+	}
+}
 
 func R5tEmpty(i, j int, r *Rope) bool {
 	return i+1 >= j
@@ -174,7 +226,7 @@ func R5tStringLeft(i, left, right int, str string, r *Rope, idxs []int) bool {
 	}
 
 	strNode := leftNode.(*R5NodeString)
-	if strNode.String != str {
+	if strNode.Value != str {
 		return false
 	}
 
@@ -197,7 +249,7 @@ func R5tStringRight(i, left, right int, str string, r *Rope, idxs []int) bool {
 	}
 
 	strNode := node.(*R5NodeString)
-	if strNode.String != str {
+	if strNode.Value != str {
 		return false
 	}
 
@@ -450,7 +502,7 @@ func equalNodes(lhs, rhs R5Node) bool {
 	case R5DatatagString:
 		lhsNumberNode := lhs.(*R5NodeString)
 		rhsNumberNode := rhs.(*R5NodeString)
-		return lhsNumberNode.String == rhsNumberNode.String
+		return lhsNumberNode.Value == rhsNumberNode.Value
 	default:
 		// TODO: panic
 	}
@@ -475,9 +527,9 @@ func R5tOpenEvarAdvance(i, right int, r *Rope, idxs []int) bool {
 }
 
 func StartMainLoop(initViewField []ViewFieldNode) error {
-	viewFieldLhs := []ViewFieldNode{}
-	viewFieldRhs := initViewField
-	
+	// viewFieldLhs := []ViewFieldNode{}
+	viewFieldRhs = initViewField
+
 	for len(viewFieldRhs) > 0 {
 		curr := viewFieldRhs[0]
 		viewFieldRhs = viewFieldRhs[1:]
@@ -488,10 +540,12 @@ func StartMainLoop(initViewField []ViewFieldNode) error {
 				argRope := argNode.Value
 				openCall := viewFieldLhs[len(viewFieldLhs)-2].(*OpenCallViewFieldNode)
 				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-2]
+				primaryActiveExpression = []ViewFieldNode{openCall, argNode}
 				openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
 			} else {
 				argRope := NewRope([]R5Node{})
 				openCall := viewFieldLhs[len(viewFieldLhs)-1].(*OpenCallViewFieldNode)
+				primaryActiveExpression = []ViewFieldNode{openCall}
 				viewFieldLhs = viewFieldLhs[:len(viewFieldLhs)-1]
 				openCall.Function.Ptr(-1, argRope.Len(), argRope, &viewFieldRhs)
 			}
@@ -645,8 +699,30 @@ func MoveExprTermVar(l, r int, src, dst *Rope) {
 		return
 	}
 
-	_, tmp := src.Split(l)
-	tmp, _ = tmp.Split(r - l + 1)
+	// _, tmp := src.Split(l)
+	// tmp, _ = tmp.Split(r - l + 1)
+	//
+	// tmp2 := NewRope([]R5Node{})
+	//
+	// for i := l; i <= r; i++ {
+	// 	// buff[i - l] = src.Get(i)
+	// 	tmp2 = tmp2.Insert(tmp2.Len(), []R5Node{src.Get(i)})
+	// 	// *dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
+	// }
+	//
+	// fmt.Println("------------")
+	// VisualizeRope(tmp, 0)
+	// fmt.Println("------------")
+	// fmt.Println("L", l, "R", r,  tmp.IsAVLBalanced(), tmp2.String() == tmp.String(), tmp.Len() == tmp2.Len())
+	// *dst = *dst.ConcatAVL(tmp)
+
+	tmp := NewRope([]R5Node{})
+
+	for i := l; i <= r; i++ {
+		// buff[i - l] = src.Get(i)
+		tmp = tmp.Insert(tmp.Len(), []R5Node{src.Get(i)})
+		// *dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
+	}
 
 	*dst = *dst.ConcatAVL(tmp)
 }

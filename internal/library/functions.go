@@ -5,6 +5,7 @@ var LibraryFunctions = map[string]interface{}{
 	"Sub":         struct{}{},
 	"Mul":         struct{}{},
 	"Div":         struct{}{},
+	"Mod":         struct{}{},
 	"Lenw":        struct{}{},
 	"Numb":        struct{}{},
 	"Symb":        struct{}{},
@@ -20,6 +21,8 @@ var LibraryFunctions = map[string]interface{}{
 	"Lower":       struct{}{},
 	"Prout":       struct{}{},
 	"Put":         struct{}{},
+	"Putout":      struct{}{},
+	"Card":        struct{}{},
 	"Get":         struct{}{},
 	"Step":        struct{}{},
 	"Random":      struct{}{},
@@ -27,6 +30,7 @@ var LibraryFunctions = map[string]interface{}{
 	"Ord":         struct{}{},
 	"Chr":         struct{}{},
 	"Type":        struct{}{},
+	"Exit":        struct{}{},
 }
 
 var LibraryFuncionAliases = map[string]string{
@@ -34,6 +38,7 @@ var LibraryFuncionAliases = map[string]string{
 	"-": "Sub",
 	"*": "Mul",
 	"/": "Div",
+	"%": "Mod",
 }
 
 var LibraryFuncionOriginToAlias = map[string]string{
@@ -41,4 +46,5 @@ var LibraryFuncionOriginToAlias = map[string]string{
 	"Sub": "-",
 	"Mul": "*",
 	"Div": "/",
+	"Mod": "%",
 }
