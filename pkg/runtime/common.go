@@ -699,8 +699,8 @@ func MoveExprTermVar(l, r int, src, dst *Rope) {
 		return
 	}
 
-	// _, tmp := src.Split(l)
-	// tmp, _ = tmp.Split(r - l + 1)
+	_, tmp := src.Split(l)
+	tmp, _ = tmp.Split(r - l + 1)
 	//
 	// tmp2 := NewRope([]R5Node{})
 	//
@@ -716,13 +716,13 @@ func MoveExprTermVar(l, r int, src, dst *Rope) {
 	// fmt.Println("L", l, "R", r,  tmp.IsAVLBalanced(), tmp2.String() == tmp.String(), tmp.Len() == tmp2.Len())
 	// *dst = *dst.ConcatAVL(tmp)
 
-	tmp := NewRope([]R5Node{})
-
-	for i := l; i <= r; i++ {
-		// buff[i - l] = src.Get(i)
-		tmp = tmp.Insert(tmp.Len(), []R5Node{src.Get(i)})
-		// *dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
-	}
+	// tmp := NewRope([]R5Node{})
+	//
+	// for i := l; i <= r; i++ {
+	// 	// buff[i - l] = src.Get(i)
+	// 	tmp = tmp.Insert(tmp.Len(), []R5Node{src.Get(i)})
+	// 	// *dst = *dst.Insert(dst.Len(), []R5Node{src.Get(i)})
+	// }
 
 	*dst = *dst.ConcatAVL(tmp)
 }

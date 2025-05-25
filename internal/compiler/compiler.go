@@ -516,13 +516,6 @@ func (c *Compiler) GenerateSentence(
 				cmd := c.generateMatchCmd(cmdArg)
 
 				charNodeCopy := *charNode
-				fmt.Println(
-					"LENGTH: ",
-					len(charNode.Value)-charLength,
-					f.Name,
-					len(charNode.Value),
-					charNode.Value,
-				)
 				charNodeCopy.Value = make([]byte, len(charNode.Value)-charLength)
 				copy(charNodeCopy.Value, charNode.Value[:len(charNode.Value)-charLength])
 
@@ -1039,7 +1032,7 @@ func (c *Compiler) buildResultCmds(
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: %s}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{Value: %s}})",
 				sNode.Value,
 			),
 		}
@@ -1048,7 +1041,7 @@ func (c *Compiler) buildResultCmds(
 
 		return []string{
 			fmt.Sprintf(
-				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{String: \"%s\"}})",
+				"result = result.Insert(result.Len(), []runtime.R5Node{&runtime.R5NodeString{Value: \"%s\"}})",
 				wNode.Value,
 			),
 		}

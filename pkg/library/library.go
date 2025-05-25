@@ -2,16 +2,12 @@ package library
 
 import (
 	"fmt"
-	"unicode"
-
-	// "io"
 	"math/big"
 	"math/rand/v2"
-	"strings"
-
-	// "fmt"
 	"os"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/t1d333/refal5-tree/pkg/runtime"
 )
@@ -20,7 +16,7 @@ const (
 	MaxOpenFiles = 40
 )
 
-var openFiles [MaxOpenFiles]*os.File = [MaxOpenFiles]*os.File{os.Stdin, nil}
+var openFiles [MaxOpenFiles]*os.File = [MaxOpenFiles]*os.File{}
 
 func strIntToRefalLong(number string) []runtime.R5Number {
 	n := new(big.Int)
@@ -385,6 +381,8 @@ func R5tPut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}
 	}
 
+	fmt.Fprintf(file, "\n")
+
 	_, result := arg.Split(l + 1)
 
 	*rhsStack = append(
@@ -452,6 +450,8 @@ func R5tPutout(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 			}
 		}
 	}
+
+	fmt.Fprintf(file, "\n")
 }
 
 func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
@@ -897,11 +897,7 @@ func R5tMod(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	// 	rhs = rhs.Neg(rhs)
 	// }
 
-	fmt.Println("LHS", lhs, "RHS", rhs)
-
 	result = result.Mod(lhs, rhs)
-
-	fmt.Println("RESULT", result)
 
 	if result.Sign() < -1 {
 		sign *= -1
@@ -1088,8 +1084,6 @@ func R5tLower(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 func R5tNumb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 	strResult := "0"
-
-	// strIntToRefalLong
 
 	first := arg.Get(curr)
 
@@ -1329,38 +1323,4 @@ func R5tOrd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
 		Value: runtime.NewRope(result),
 	}}, *rhsStack...)
-}
-
-func R5tExistsFile(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
-	filename := ""
-	for i := l; i < r; i++ {
-		curr := arg.Get(i)
-		if curr.Type() != runtime.R5DatatagChar {
-			// Panic?
-			return
-		}
-
-		charNode := curr.(*runtime.R5NodeChar)
-		filename += string(charNode.Char)
-	}
-
-	_, err := os.Stat(filename)
-
-	var result *runtime.Rope
-	if os.IsNotExist(err) {
-		result = runtime.NewRope([]runtime.R5Node{&runtime.R5NodeFunction{
-			Function: &runtime.R5Function{
-				Name: "False",
-			},
-		}})
-	} else {
-		result = runtime.NewRope([]runtime.R5Node{&runtime.R5NodeFunction{
-			Function: &runtime.R5Function{
-				Name: "True",
-			},
-		}})
-	}
-	*rhsStack = append(
-		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{Value: result}},
-		*rhsStack...)
 }
