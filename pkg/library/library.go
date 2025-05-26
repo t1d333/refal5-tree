@@ -70,7 +70,7 @@ func fromDigitsToBigInt(parts []runtime.R5Number) *big.Int {
 	return result
 }
 
-func parseRefalLongInt(l, r int, arg *runtime.Rope) (*big.Int, error) {
+func parseRefalLongInt(l, r int, arg runtime.Rope) (*big.Int, error) {
 	curr := l
 	node := arg.Get(curr)
 	sign := 1
@@ -110,7 +110,7 @@ func parseRefalLongInt(l, r int, arg *runtime.Rope) (*big.Int, error) {
 	return result, nil
 }
 
-func parseAtithmArgs(l, r int, arg *runtime.Rope) (*big.Int, *big.Int, error) {
+func parseAtithmArgs(l, r int, arg runtime.Rope) (*big.Int, *big.Int, error) {
 	if r-l <= 1 {
 		return nil, nil, fmt.Errorf("Empty arg")
 	}
@@ -170,7 +170,7 @@ func parseAtithmArgs(l, r int, arg *runtime.Rope) (*big.Int, *big.Int, error) {
 	return nil, nil, fmt.Errorf("Recognition failed")
 }
 
-func R5tRandom(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tRandom(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l > 2 {
 		panic("Recognition Failed")
 	}
@@ -194,15 +194,13 @@ func R5tRandom(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		result = append(result, &runtime.R5NodeNumber{Number: runtime.R5Number(randomNum)})
 	}
 
-	fmt.Println("----", result, length)
-
 	*rhsStack = append(
 		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
 			Value: runtime.NewRope(result),
 		}}, *rhsStack...)
 }
 
-func R5tRandomDigit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tRandomDigit(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l > 2 {
 		panic("Recognition Failed")
 	}
@@ -224,7 +222,7 @@ func R5tRandomDigit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNo
 		}}, *rhsStack...)
 }
 
-func R5tStep(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tStep(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l > 2 {
 		runtime.RecognitionImpossible()
 	}
@@ -237,7 +235,7 @@ func R5tStep(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tCard(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tCard(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	file := os.Stdin
 
 	buf := make([]byte, 1)
@@ -272,7 +270,7 @@ func R5tCard(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tGet(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tGet(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
 	numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
@@ -322,7 +320,7 @@ func R5tGet(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tPut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tPut(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
 	numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
@@ -391,7 +389,7 @@ func R5tPut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tPutout(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tPutout(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
 	numberNode, ok := arg.Get(curr).(*runtime.R5NodeNumber)
@@ -454,7 +452,7 @@ func R5tPutout(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	fmt.Fprintf(file, "\n")
 }
 
-func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tProut(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
 	for curr < r {
@@ -501,7 +499,7 @@ func R5tProut(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	fmt.Printf("\n")
 }
 
-func R5tExit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tExit(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l < 2 || r-l > 3 {
 		runtime.RecognitionImpossible()
 	}
@@ -525,8 +523,6 @@ func R5tExit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 	exitCode *= int(numberNode.Number)
 
-	fmt.Println("EXIT CODE: ", exitCode)
-
 	os.Exit(exitCode)
 }
 
@@ -534,7 +530,7 @@ func R5tExit(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 <Close s.FileNo> == пусто
 Семантика. Закрывает открытый файл с номером s.FileNo % 40. Если файл с этим номером не был открыт, функция ничего не делает.
 */
-func R5tClose(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tClose(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l < 2 || r-l > 2 {
 		runtime.RecognitionImpossible()
 	}
@@ -567,7 +563,7 @@ s.Mode ::=
 
 e.FileName ::= s.CHAR+
 */
-func R5tOpen(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tOpen(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l < 3 {
 		runtime.RecognitionImpossible()
 	}
@@ -642,7 +638,7 @@ e.Argument ::= s.CHAR*
 Семантика: возвращает аргумент командной строки с указанным номером. Нулевой аргумент — имя вызываемой программы. Если запрашиваемый аргумент не существует — фактическое их число меньше, чем s.ArgNo, возвращается пустая строка.
 */
 
-func R5tArg(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tArg(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 || l-r > 2 {
 		runtime.RecognitionImpossible()
 	}
@@ -673,7 +669,7 @@ func R5tArg(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tCompare(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tCompare(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -702,7 +698,7 @@ func R5tCompare(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 		}}, *rhsStack...)
 }
 
-func R5tAdd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tAdd(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -743,7 +739,7 @@ func R5tAdd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tSub(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tSub(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -784,7 +780,7 @@ func R5tSub(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tMul(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tMul(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -825,7 +821,7 @@ func R5tMul(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tDiv(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tDiv(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -873,7 +869,7 @@ func R5tDiv(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tMod(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tMod(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -925,7 +921,7 @@ func R5tMod(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		}}, *rhsStack...)
 }
 
-func R5tImplode_Ext(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tImplode_Ext(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	R5tImplode(l, r, arg, rhsStack)
 }
 
@@ -933,7 +929,7 @@ func R5tImplode_Ext(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNo
 	<Implode e.Expr>
 */
 
-func R5tImplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tImplode(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	if r-l <= 1 {
 		return
 	}
@@ -946,7 +942,7 @@ func R5tImplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 		nullResult := runtime.NewRope([]runtime.R5Node{&runtime.R5NodeNumber{Number: 0}})
 		*rhsStack = append(
 			[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
-				Value: nullResult.Concat(arg),
+				Value: nullResult.ConcatAVL(arg),
 			}}, *rhsStack...)
 
 		return
@@ -979,7 +975,7 @@ func R5tImplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 
 	*rhsStack = append([]runtime.ViewFieldNode{
 		&runtime.RopeViewFieldNode{
-			Value: identResult.Concat(other),
+			Value: identResult.ConcatAVL(other),
 		},
 	}, *rhsStack...)
 }
@@ -988,11 +984,11 @@ func R5tImplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 <Explode s.Identifier> возвращает строку символов, которая составляла s.Idenitifier .
 */
 
-func R5tExplode_Ext(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tExplode_Ext(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	R5tExplode(l, r, arg, rhsStack)
 }
 
-func R5tExplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tExplode(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	begin := l + 1
 
 	if r-l > 2 || r-l <= 1 {
@@ -1021,7 +1017,7 @@ func R5tExplode(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) 
 	}}, *rhsStack...)
 }
 
-func R5tUpper(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tUpper(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	// NOTE: return flat rope, maybe need concat
 	curr := l + 1
 
@@ -1049,7 +1045,7 @@ func R5tUpper(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		*rhsStack...)
 }
 
-func R5tLower(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tLower(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	// NOTE: return flat rope, maybe need concat
 	curr := l + 1
 
@@ -1081,7 +1077,7 @@ func R5tLower(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 <Numb e.Digit-string> возвращает макроцифру, представленную строкой e.Digit-string
 */
 
-func R5tNumb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tNumb(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 	strResult := "0"
 
@@ -1136,7 +1132,7 @@ func R5tNumb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 
 */
 
-func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tSymb(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 
 	first := arg.Get(curr)
@@ -1174,7 +1170,7 @@ func R5tSymb(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	}}, *rhsStack...)
 }
 
-func R5tType(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tType(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	resultType := &runtime.R5NodeChar{}
 	resultSubType := &runtime.R5NodeChar{}
 
@@ -1238,11 +1234,11 @@ func R5tType(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	}
 
 	*rhsStack = append([]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{
-		Value: runtime.NewRope(result).Concat(arg),
+		Value: runtime.NewRope(result).ConcatAVL(arg),
 	}}, *rhsStack...)
 }
 
-func R5tLenw(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tLenw(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	currIdx := l + 1
 	argLen := 0
 
@@ -1256,14 +1252,16 @@ func R5tLenw(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 		currIdx += 1
 	}
 
-	charNode := &runtime.R5NodeNumber{Number: runtime.R5Number(argLen)}
-	tmpRope := runtime.NewRope([]runtime.R5Node{charNode}).Concat(arg)
+	charRope := runtime.NewRope(
+		[]runtime.R5Node{&runtime.R5NodeNumber{Number: runtime.R5Number(argLen)}},
+	)
+	charRope = charRope.ConcatAVL(arg)
 
 	*rhsStack = append(
-		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{Value: tmpRope}}, *rhsStack...)
+		[]runtime.ViewFieldNode{&runtime.RopeViewFieldNode{Value: charRope}}, *rhsStack...)
 }
 
-func R5tChr(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tChr(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 	result := []runtime.R5Node{}
 
@@ -1284,7 +1282,7 @@ func R5tChr(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	}}, *rhsStack...)
 }
 
-func R5tOrd(l, r int, arg *runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
+func R5tOrd(l, r int, arg runtime.Rope, rhsStack *[]runtime.ViewFieldNode) {
 	curr := l + 1
 	result := []runtime.R5Node{}
 

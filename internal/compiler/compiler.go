@@ -21,7 +21,7 @@ const (
 package main
 
 import (
-//	"fmt"
+	"fmt"
 	"github.com/t1d333/refal5-tree/pkg/runtime"
 	"github.com/t1d333/refal5-tree/pkg/library"
 )
@@ -51,7 +51,9 @@ func main() {
 }`
 
 	compiledFunctionTmplString = `
-func r5t{{.CompiledName}}_ (l, r int, arg *runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
+func r5t{{.CompiledName}}_ (l, r int, arg runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
+	fmt.Println("ARG HEIGHT: ", arg.Height(), arg.Len(), arg.IsAVLBalanced())
+	runtime.VisualizeRope(arg, 0)
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}
@@ -1058,7 +1060,7 @@ func (c *Compiler) buildResultCmds(
 		vNode := node.(*ast.VarResultNode)
 		if vNode.Type == ast.SymbolVarType {
 			idxs := varsToIdxs[fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)]
-			return []string{fmt.Sprintf("runtime.CopySymbolVar(p[%d], arg, result)", idxs[0][0])}
+			return []string{fmt.Sprintf("runtime.CopySymbolVar(p[%d], &arg, &result)", idxs[0][0])}
 		} else {
 			ident := fmt.Sprintf("%s.%s", vNode.GetVarTypeStr(), vNode.Name)
 			idxs := varsToIdxs[ident]
@@ -1071,12 +1073,12 @@ func (c *Compiler) buildResultCmds(
 
 				return []string{
 					// fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[varsShift[ident]-1][0], idxs[varsShift[ident]-1][0]+1),
-					fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], arg, result)", idxs[varsShift[ident]-1][0], idxs[varsShift[ident]-1][0]+1),
+					fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], &arg, &result)", idxs[varsShift[ident]-1][0], idxs[varsShift[ident]-1][0]+1),
 				}
 			}
 
 			return []string{
-				fmt.Sprintf("runtime.CopyExprTermVar(p[%d], p[%d], arg, result)", idxs[0][0], idxs[0][0]+1),
+				fmt.Sprintf("runtime.MoveExprTermVar(p[%d], p[%d], &arg, &result)", idxs[0][0], idxs[0][0]+1),
 			}
 		}
 	case ast.GroupedResultType:

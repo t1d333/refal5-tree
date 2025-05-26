@@ -41,7 +41,7 @@ func (*CloseBracketViewFieldNode) Type() ViewFieldNodeType {
 }
 
 type RopeViewFieldNode struct {
-	Value *Rope
+	Value Rope
 }
 
 func (*RopeViewFieldNode) Type() ViewFieldNodeType {
