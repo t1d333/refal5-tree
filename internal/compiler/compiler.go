@@ -21,7 +21,7 @@ const (
 package main
 
 import (
-	"fmt"
+	// "fmt"
 	"github.com/t1d333/refal5-tree/pkg/runtime"
 	"github.com/t1d333/refal5-tree/pkg/library"
 )
@@ -52,8 +52,9 @@ func main() {
 
 	compiledFunctionTmplString = `
 func r5t{{.CompiledName}}_ (l, r int, arg runtime.Rope, viewFieldRhs *[]runtime.ViewFieldNode) {
-	fmt.Println("ARG HEIGHT: ", arg.Height(), arg.Len(), arg.IsAVLBalanced())
-	runtime.VisualizeRope(arg, 0)
+	// fmt.Println("ARG HEIGHT: ", arg.Height(), arg.Len(), arg.IsAVLBalanced())
+	// runtime.VisualizeRope(arg, 0)
+	// fmt.Println("------------------------")
 	{{ range .Body }}
 		{{ template "r5t-sentence" . }}
 	{{ end }}

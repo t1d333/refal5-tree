@@ -29,4 +29,30 @@ autotests: build
 rmcc: rmcc.ref
 	./build/refal5t rmcc.ref
 	go build rmcc.go
+
+generate-test-inputs:
+	python3 ./scripts/gen-files.py -o inputs 1kb 2kb 5kb 10kb 32kb 64kb 128kb 512kb 1mb
 	
+fab: fab.ref
+	refal5t fab.ref
+	go build fab.go
+	
+.PHONY: test-fab
+test-fab: fab
+	@BIN=./fab && \
+	DIR=./inputs && \
+	for file in $$(ls $$DIR); do \
+		echo "Running on $$file..."; \
+		/usr/bin/time -f "\nReal %e sec\nTime: %E CPU: %P Mem: %MKB" $$BIN "$$DIR/$$file"; \
+		echo; \
+	done
+	
+.PHONY: test-fab-lambda
+test-fab-lambda: fab.ref
+	@BIN=./fabl && \
+	DIR=./inputs && \
+	for file in $$(ls $$DIR); do \
+		echo "Running on $$file..."; \
+		/usr/bin/time -f "\nReal %e sec\nTime: %E CPU: %P Mem: %MKB" $$BIN "$$DIR/$$file"; \
+		echo; \
+	done
